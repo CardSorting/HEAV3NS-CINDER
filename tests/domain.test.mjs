@@ -9,6 +9,7 @@ import { Message } from "../src/domain/message.mjs";
 import { Match } from "../src/domain/match.mjs";
 import { Session } from "../src/domain/agenda.mjs";
 import { explainMatchRelevance } from "../src/domain/relevanceScore.mjs";
+import { ConferenceEvent, SELECTABLE_CATEGORIES } from "../src/domain/conferenceEvent.mjs";
 import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
 
 describe("Domain Entities", () => {
@@ -159,5 +160,42 @@ describe("Event scoping on domain entities", () => {
     const msg = new Message(base.message);
     pod.addMessage(msg);
     assert.strictEqual(msg.eventId, null);
+  });
+});
+
+describe("ConferenceEvent entity", () => {
+  const props = {
+    id: "urn:ue:event:devsummit-2026", name: "DevSummit 2026", category: "conference",
+    startDate: "2026-12-23T09:00:00-07:00", endDate: "2026-12-25T17:30:00-07:00", timezone: "America/Denver",
+    venue: { id: "urn:ue:place:salt-palace", name: "Salt Palace Convention Center", city: "Salt Lake City" },
+    cinder: { enabled: true, registrations: 160, sessions: 61 }
+  };
+
+  it("constructs, round-trips and reports duration in its own timezone", () => {
+    const ev = new ConferenceEvent(props);
+    assert.strictEqual(ev.durationDays(), 3);
+    assert.deepStrictEqual(new ConferenceEvent(ev.toJSON()).toJSON(), ev.toJSON());
+    assert.strictEqual(ev.toJSON().cinder.speakers, 0);
+  });
+
+  it("is selectable only when CINDER-enabled and not cancelled", () => {
+    assert.strictEqual(new ConferenceEvent(props).isSelectable(), true);
+    assert.strictEqual(new ConferenceEvent({ ...props, status: "EventCancelled" }).isSelectable(), false);
+    assert.strictEqual(new ConferenceEvent({ ...props, cinder: { enabled: false } }).isSelectable(), false);
+  });
+
+  it("reports its phase relative to a clock time", () => {
+    const ev = new ConferenceEvent(props);
+    assert.strictEqual(ev.phaseAt(Date.parse("2026-12-01T00:00:00Z")), "upcoming");
+    assert.strictEqual(ev.phaseAt(Date.parse("2026-12-23T18:45:00Z")), "in-progress");
+    assert.strictEqual(ev.phaseAt(Date.parse("2027-01-01T00:00:00Z")), "past");
+  });
+
+  it("validates category, dates and timezone", () => {
+    assert.deepStrictEqual([...SELECTABLE_CATEGORIES], ["conference", "academic", "meetup", "expo"]);
+    assert.throws(() => new ConferenceEvent({ ...props, category: "concert" }), /category must be one of/);
+    assert.throws(() => new ConferenceEvent({ ...props, startDate: "nope" }), /valid ISO startDate/);
+    assert.throws(() => new ConferenceEvent({ ...props, endDate: "2026-12-01T00:00:00Z" }), /must not be before/);
+    assert.throws(() => new ConferenceEvent({ ...props, timezone: "" }), /IANA timezone/);
   });
 });
