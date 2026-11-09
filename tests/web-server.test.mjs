@@ -183,5 +183,17 @@ describe("CinderWebServer HTTP & API Routes", () => {
       const line = text.split("\n").find((l) => l.includes("attendee.checked_in"));
       assert.strictEqual(JSON.parse(line.replace(/^data: /, "")).eventId, SEED);
     });
+
+    it("resets discovery through the controller, keeping matches", async () => {
+      const post = (path, body) => fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      await post("/api/swipe", { fromAttendeeId: "att_elena_rostova", toAttendeeId: "att_marcus_vance", action: "pass" });
+      const before = await (await fetch(`${baseUrl}/api/discovery?attendeeId=att_elena_rostova`)).json();
+      assert.ok(!before.candidates.some((c) => c.profile.id === "att_marcus_vance"));
+      const reset = await (await post("/api/discovery/reset", { attendeeId: "att_elena_rostova" })).json();
+      assert.strictEqual(reset.reset, true);
+      assert.strictEqual(reset.removed, 1);
+      assert.strictEqual(reset.eventId, SEED);
+      assert.ok(reset.feed.candidates.some((c) => c.profile.id === "att_marcus_vance"), "passed attendee is suggested again");
+    });
   });
 });

@@ -174,6 +174,23 @@ export class DiscoveryController {
   }
 
   /**
+   * Resets an attendee's discovery deck: removes their passes (or every swipe with `resetAll`) so those
+   * attendees can be suggested again. Mutual matches are never removed.
+   * @param {string} attendeeId
+   * @param {Object} [options]
+   * @param {string} [options.eventId] - defaults to the attendee's event
+   * @param {boolean} [options.resetAll=false] - also clear likes that did not become matches
+   * @param {number} [options.limit=10] - size of the refreshed feed
+   * @returns {Promise<{ reset: true, removed: number, feed: Object }>}
+   */
+  async resetDiscovery(attendeeId, { eventId, resetAll = false, limit = 10 } = {}) {
+    const scopeEventId = eventId || (await this.attendeeRepo.findById(attendeeId))?.eventId || undefined;
+    const removed = await this.interactionRepo.deleteSwipes(scopeEventId, attendeeId, { action: resetAll ? undefined : "pass" });
+    const feed = await this.getDiscoveryFeed(attendeeId, limit, { eventId: scopeEventId });
+    return { reset: true, removed, feed };
+  }
+
+  /**
    * Whether one attendee has already liked another (used to auto-reciprocate demo likes).
    * @param {string} fromAttendeeId
    * @param {string} toAttendeeId

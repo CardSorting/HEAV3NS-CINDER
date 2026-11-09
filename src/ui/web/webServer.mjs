@@ -190,9 +190,8 @@ export class CinderWebServer {
       const event = await this.eventFor(body.eventId);
       const attendeeId = body.attendeeId || "att_alex_chen";
       await this.attendeeIn(event, attendeeId);
-      await this.app.interactionRepo.deleteSwipes(event.id, attendeeId, { action: body.resetAll ? undefined : "pass" });
-      const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, 10, { eventId: event.id });
-      return this.sendJson(res, { reset: true, eventId: event.id, feed });
+      const result = await this.app.discoveryCtrl.resetDiscovery(attendeeId, { eventId: event.id, resetAll: Boolean(body.resetAll) });
+      return this.sendJson(res, { ...result, eventId: event.id });
     }
 
     if (pathname === "/api/swipe" && method === "POST") {
