@@ -143,7 +143,8 @@ export class CinderApp {
     this.discoveryCtrl = new DiscoveryController({
       attendeeRepo: this.attendeeRepo,
       esClient: this.esClient,
-      eventBus: this.eventBus
+      eventBus: this.eventBus,
+      interactionRepo: this.interactionRepo
     });
 
     this.podCtrl = new PodOrchestrationController({

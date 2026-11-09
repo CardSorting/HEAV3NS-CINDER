@@ -190,11 +190,7 @@ export class CinderWebServer {
       const event = await this.eventFor(body.eventId);
       const attendeeId = body.attendeeId || "att_alex_chen";
       await this.attendeeIn(event, attendeeId);
-      for (const [key, action] of this.app.discoveryCtrl.swipes.entries()) {
-        if (key.startsWith(`${attendeeId}:`) && (action === "pass" || body.resetAll)) {
-          this.app.discoveryCtrl.swipes.delete(key);
-        }
-      }
+      await this.app.interactionRepo.deleteSwipes(event.id, attendeeId, { action: body.resetAll ? undefined : "pass" });
       const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, 10, { eventId: event.id });
       return this.sendJson(res, { reset: true, eventId: event.id, feed });
     }
@@ -205,16 +201,16 @@ export class CinderWebServer {
       await this.attendeeIn(event, body.fromAttendeeId);
       await this.attendeeIn(event, body.toAttendeeId);
       if (body.action === "like" && body.autoReciprocate) {
-        const reverseKey = `${body.toAttendeeId}:${body.fromAttendeeId}`;
-        if (!this.app.discoveryCtrl.swipes.has(reverseKey)) {
+        if (!(await this.app.discoveryCtrl.hasLiked(body.toAttendeeId, body.fromAttendeeId, event.id))) {
           await this.app.discoveryCtrl.recordSwipe({
             fromAttendeeId: body.toAttendeeId,
             toAttendeeId: body.fromAttendeeId,
-            action: "like"
+            action: "like",
+            eventId: event.id
           });
         }
       }
-      const result = await this.app.discoveryCtrl.recordSwipe(body);
+      const result = await this.app.discoveryCtrl.recordSwipe({ ...body, eventId: event.id });
       return this.sendJson(res, result);
     }
 

@@ -14,15 +14,15 @@ export class DiscoveryController {
    * @param {import("../domain/interfaces/IAttendeeRepository.mjs").IAttendeeRepository} params.attendeeRepo
    * @param {import("../domain/interfaces/IElasticsearchClient.mjs").IElasticsearchClient} params.esClient
    * @param {import("../domain/interfaces/IEventBus.mjs").IEventBus} params.eventBus
+   * @param {import("../domain/interfaces/IInteractionRepository.mjs").IInteractionRepository} params.interactionRepo
+   *   Swipes and mutual matches (event-scoped)
    */
-  constructor({ attendeeRepo, esClient, eventBus }) {
+  constructor({ attendeeRepo, esClient, eventBus, interactionRepo }) {
+    if (!interactionRepo) throw new Error("DiscoveryController requires interactionRepo");
     this.attendeeRepo = attendeeRepo;
     this.esClient = esClient;
     this.eventBus = eventBus;
-    // Track swipes: key = `${fromId}:${toId}`, value = "like" | "pass"
-    this.swipes = new Map();
-    // Track mutual matches
-    this.matches = new Map();
+    this.interactionRepo = interactionRepo;
   }
 
   /**
@@ -40,13 +40,7 @@ export class DiscoveryController {
     const scopeEventId = eventId || source.eventId || null;
 
     // Exclude self and already swiped attendees
-    const excludedIds = [attendeeId];
-    for (const [key] of this.swipes.entries()) {
-      if (key.startsWith(`${attendeeId}:`)) {
-        const targetId = key.split(":")[1];
-        excludedIds.push(targetId);
-      }
-    }
+    const excludedIds = [attendeeId, ...(await this.interactionRepo.listSwipedIds(scopeEventId || undefined, attendeeId))];
 
     const queryText = [
       ...source.interests,
@@ -103,40 +97,51 @@ export class DiscoveryController {
    * @param {string} params.fromAttendeeId
    * @param {string} params.toAttendeeId
    * @param {"like" | "pass"} params.action
+   * @param {string} [params.eventId] - defaults to the swiping attendee's event
    */
-  async recordSwipe({ fromAttendeeId, toAttendeeId, action }) {
-    const swipeKey = `${fromAttendeeId}:${toAttendeeId}`;
-    this.swipes.set(swipeKey, action);
+  async recordSwipe({ fromAttendeeId, toAttendeeId, action, eventId }) {
+    const source = await this.attendeeRepo.findById(fromAttendeeId);
+    const scopeEventId = eventId || source?.eventId || null;
 
     let isMutual = false;
     let matchEntity = null;
 
-    if (action === "like") {
-      const reverseKey = `${toAttendeeId}:${fromAttendeeId}`;
-      if (this.swipes.get(reverseKey) === "like") {
-        isMutual = true;
+    // A like completes a match when the other attendee already liked back.
+    const reverse = action === "like"
+      ? await this.interactionRepo.findSwipe(scopeEventId || undefined, toAttendeeId, fromAttendeeId)
+      : null;
 
-        const source = await this.attendeeRepo.findById(fromAttendeeId);
-        const target = await this.attendeeRepo.findById(toAttendeeId);
-        const explanation = source && target ? explainMatchRelevance(source, target).synergySummary : "";
+    if (reverse?.action === "like") {
+      isMutual = true;
+      const target = await this.attendeeRepo.findById(toAttendeeId);
+      const explanation = source && target ? explainMatchRelevance(source, target).synergySummary : "";
+      matchEntity = new Match({
+        id: generatePrefixedId("match"),
+        initiatorId: fromAttendeeId,
+        targetId: toAttendeeId,
+        action: "like",
+        mutual: true,
+        explanation,
+        eventId: scopeEventId
+      });
+      // The completing swipe is stored as the mutual match.
+      await this.interactionRepo.saveSwipe(matchEntity);
+    } else {
+      await this.interactionRepo.saveSwipe(new Match({
+        id: generatePrefixedId("swipe"),
+        initiatorId: fromAttendeeId,
+        targetId: toAttendeeId,
+        action,
+        eventId: scopeEventId
+      }));
+    }
 
-        matchEntity = new Match({
-          id: generatePrefixedId("match"),
-          initiatorId: fromAttendeeId,
-          targetId: toAttendeeId,
-          action: "like",
-          mutual: true,
-          explanation
-        });
-
-        this.matches.set(matchEntity.id, matchEntity);
-
-        this.eventBus.publish("match.mutual", {
-          match: matchEntity.toJSON(),
-          fromAttendeeId,
-          toAttendeeId
-        });
-      }
+    if (isMutual) {
+      this.eventBus.publish("match.mutual", {
+        match: matchEntity.toJSON(),
+        fromAttendeeId,
+        toAttendeeId
+      });
     }
 
     return {
@@ -151,22 +156,32 @@ export class DiscoveryController {
    * Lists mutual matches for an attendee.
    * @param {string} attendeeId
    * @param {Object} [options]
-   * @param {string} [options.eventId] - only matches with partners registered for this event
+   * @param {string} [options.eventId] - event to look in (defaults to the attendee's event)
    */
   async getMutualMatches(attendeeId, { eventId } = {}) {
+    const scopeEventId = eventId || (await this.attendeeRepo.findById(attendeeId))?.eventId || undefined;
+    const matches = await this.interactionRepo.listMutualMatches(scopeEventId, attendeeId);
     const results = [];
-    for (const match of this.matches.values()) {
-      if (match.initiatorId === attendeeId || match.targetId === attendeeId) {
-        const partnerId = match.initiatorId === attendeeId ? match.targetId : match.initiatorId;
-        const partner = await this.attendeeRepo.findById(partnerId);
-        if (eventId && partner && partner.eventId !== eventId) continue;
-        results.push({
-          match: match.toJSON(),
-          partner: partner ? partner.toJSON() : null
-        });
-      }
+    for (const match of matches) {
+      const partnerId = match.initiatorId === attendeeId ? match.targetId : match.initiatorId;
+      const partner = await this.attendeeRepo.findById(partnerId);
+      results.push({
+        match: match.toJSON(),
+        partner: partner ? partner.toJSON() : null
+      });
     }
     return results;
+  }
+
+  /**
+   * Whether one attendee has already liked another (used to auto-reciprocate demo likes).
+   * @param {string} fromAttendeeId
+   * @param {string} toAttendeeId
+   * @param {string} [eventId]
+   */
+  async hasLiked(fromAttendeeId, toAttendeeId, eventId) {
+    const swipe = await this.interactionRepo.findSwipe(eventId, fromAttendeeId, toAttendeeId);
+    return swipe?.action === "like";
   }
 }
 
