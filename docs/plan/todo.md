@@ -28,7 +28,7 @@
 [x] Add an EventController in core that lists selectable events and resolves the active event for a request
 [x] Wire the Elasticsearch repositories into CinderApp behind configuration, keeping the memory repositories for offline mode and tests
 [x] Add GET /api/conferences and GET /api/conferences/:id routes and require an eventId parameter on attendee, discovery, swipe, match, pod and agenda routes
-[ ] Scope SSE broadcasts by eventId so clients only receive realtime events for their selected event
+[x] Scope SSE broadcasts by eventId so clients only receive realtime events for their selected event
 [ ] Move swipe and match state out of DiscoveryController maps into the InteractionRepository
 [ ] Move the discovery reset logic from webServer into a DiscoveryController method so the UI layer holds no state
 [ ] Move direct-message storage from the webServer directMessages map into CommunicationController and the MessageRepository

@@ -146,6 +146,42 @@ describe("CinderWebServer HTTP & API Routes", () => {
       const pods = await (await fetch(`${baseUrl}/api/pods?eventId=${enc(SEED)}`)).json();
       assert.ok(pods.some((p) => p.id === pod.id));
     });
+
+    it("delivers realtime events only to clients watching the same event", async () => {
+      const received = { a: [], b: [] };
+      const fake = (bucket) => ({ write: (chunk) => received[bucket].push(JSON.parse(chunk.replace(/^data: /, ""))) });
+      const a = fake("a");
+      const b = fake("b");
+      server.sseClients.set(a, SEED);
+      server.sseClients.set(b, "urn:ue:event:other");
+      try {
+        server.broadcastSSE("pod.formed", { pod: { id: "p1" } }, SEED);
+        server.broadcastSSE("system.notice", { text: "unscoped" });
+        assert.deepStrictEqual(received.a.map((m) => m.type), ["pod.formed", "system.notice"]);
+        assert.deepStrictEqual(received.b.map((m) => m.type), ["system.notice"]);
+        assert.strictEqual(received.a[0].eventId, SEED);
+        assert.strictEqual(await server.eventIdOf({ pod: { eventId: SEED } }), SEED);
+        assert.strictEqual(await server.eventIdOf({ fromAttendeeId: "att_alex_chen" }), SEED);
+      } finally {
+        server.sseClients.delete(a);
+        server.sseClients.delete(b);
+      }
+    });
+
+    it("tags realtime events from the API with the event and rejects SSE for unknown events", async () => {
+      const res = await fetch(`${baseUrl}/api/events?eventId=${enc("urn:ue:event:nope")}`);
+      assert.strictEqual(res.status, 404);
+      const controller = new AbortController();
+      const stream = await fetch(`${baseUrl}/api/events`, { signal: controller.signal });
+      const reader = stream.body.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      await fetch(`${baseUrl}/api/check-in`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Streamed", title: "SRE" }) });
+      while (!text.includes("attendee.checked_in")) text += decoder.decode((await reader.read()).value);
+      controller.abort();
+      const line = text.split("\n").find((l) => l.includes("attendee.checked_in"));
+      assert.strictEqual(JSON.parse(line.replace(/^data: /, "")).eventId, SEED);
+    });
   });
 });
-

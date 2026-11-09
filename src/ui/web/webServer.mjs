@@ -26,7 +26,8 @@ export class CinderWebServer {
     this.port = port;
     this.app = app || new CinderApp();
     this.scenarioRunner = new ScenarioRunner(this.app);
-    this.sseClients = new Set();
+    /** @type {Map<import("node:http").ServerResponse, string>} SSE client -> eventId it watches */
+    this.sseClients = new Map();
     this.directMessages = new Map();
     this.server = null;
   }
@@ -34,25 +35,14 @@ export class CinderWebServer {
   async start() {
     await this.app.initialize();
 
-    // Hook domain events to SSE clients
-    this.app.eventBus.subscribe("attendee.checked_in", (payload) => {
-      this.broadcastSSE("attendee.checked_in", payload);
-    });
-    this.app.eventBus.subscribe("match.mutual", (payload) => {
-      this.broadcastSSE("match.mutual", payload);
-    });
-    this.app.eventBus.subscribe("pod.formed", (payload) => {
-      this.broadcastSSE("pod.formed", payload);
-    });
-    this.app.eventBus.subscribe("message.sent", (payload) => {
-      this.broadcastSSE("message.sent", payload);
-    });
-    this.app.eventBus.subscribe("meetup.pinned", (payload) => {
-      this.broadcastSSE("meetup.pinned", payload);
-    });
-    this.app.eventBus.subscribe("facilitator.announcement", (payload) => {
-      this.broadcastSSE("facilitator.announcement", payload);
-    });
+    // Hook domain events to SSE clients, delivered only to clients watching the same event
+    for (const type of ["attendee.checked_in", "match.mutual", "pod.formed", "message.sent", "meetup.pinned", "facilitator.announcement"]) {
+      this.app.eventBus.subscribe(type, (payload) => {
+        this.eventIdOf(payload)
+          .then((eventId) => this.broadcastSSE(type, payload, eventId))
+          .catch((err) => console.error(`SSE ${type} routing failed:`, err));
+      });
+    }
 
     this.server = http.createServer(async (req, res) => {
       try {
@@ -74,7 +64,7 @@ export class CinderWebServer {
 
   async stop() {
     if (this.server) {
-      for (const client of this.sseClients) {
+      for (const client of this.sseClients.keys()) {
         client.end();
       }
       this.sseClients.clear();
@@ -82,11 +72,32 @@ export class CinderWebServer {
     }
   }
 
-  broadcastSSE(type, payload) {
-    const data = JSON.stringify({ type, payload });
-    for (const client of this.sseClients) {
-      client.write(`data: ${data}\n\n`);
+  /**
+   * Sends a realtime event to SSE clients. With an eventId, only clients watching that event receive it;
+   * without one (event could not be determined) every client does.
+   * @param {string} type
+   * @param {Object} payload
+   * @param {string|null} [eventId]
+   */
+  broadcastSSE(type, payload, eventId = null) {
+    const data = JSON.stringify({ type, eventId, payload });
+    for (const [client, clientEventId] of this.sseClients) {
+      if (!eventId || clientEventId === eventId) client.write(`data: ${data}\n\n`);
     }
+  }
+
+  /**
+   * Works out which event a domain-event payload belongs to (directly, or via its attendee or pod).
+   * @param {Object} payload
+   * @returns {Promise<string|null>}
+   */
+  async eventIdOf(payload = {}) {
+    const direct = payload.eventId || payload.pod?.eventId || payload.match?.eventId || payload.message?.eventId;
+    if (direct) return direct;
+    const attendeeId = payload.fromAttendeeId || payload.match?.initiatorId;
+    if (attendeeId) return (await this.app.checkInCtrl.getProfile(attendeeId))?.eventId || null;
+    if (payload.podId) return (await this.app.podCtrl.getPod(payload.podId))?.eventId || null;
+    return null;
   }
 
   async handleRequest(req, res) {
@@ -107,13 +118,14 @@ export class CinderWebServer {
 
     // 1. SSE Realtime Event Stream
     if (pathname === "/api/events" && method === "GET") {
+      const event = await this.eventFor(url.searchParams.get("eventId"));
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive"
       });
       res.write("retry: 10000\n\n");
-      this.sseClients.add(res);
+      this.sseClients.set(res, event.id);
       req.on("close", () => this.sseClients.delete(res));
       return;
     }
@@ -243,7 +255,7 @@ export class CinderWebServer {
       const existing = this.directMessages.get(matchId) || [];
       existing.push(msg);
       this.directMessages.set(matchId, existing);
-      this.broadcastSSE("match.message", { matchId, message: msg });
+      this.broadcastSSE("match.message", { matchId, message: msg }, event.id);
       return this.sendJson(res, msg);
     }
 
@@ -339,7 +351,7 @@ export class CinderWebServer {
           location,
           time,
           rsvps: pod.pinnedMeetup.rsvps
-        });
+        }, event.id);
       }
       return this.sendJson(res, pod ? pod.pinnedMeetup : { location, time, confirmed: true });
     }
@@ -366,7 +378,7 @@ export class CinderWebServer {
       this.broadcastSSE("meetup.rsvp", {
         podId,
         pinnedMeetup: pod.pinnedMeetup
-      });
+      }, event.id);
       return this.sendJson(res, pod.pinnedMeetup);
     }
 
