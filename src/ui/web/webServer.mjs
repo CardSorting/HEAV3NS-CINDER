@@ -299,6 +299,15 @@ export class CinderWebServer {
       return this.sendJson(res, message.toJSON());
     }
 
+    if (pathname.startsWith("/api/pods/") && pathname.endsWith("/talks") && method === "GET") {
+      const podId = pathname.split("/")[3];
+      const event = await this.eventFor(url.searchParams.get("eventId"));
+      await this.podIn(event, podId);
+      const limit = Math.min(10, parseInt(url.searchParams.get("limit") || "3", 10) || 3);
+      const talks = await this.app.facilitatorCtrl.relevantTalks(podId, { limit });
+      return this.sendJson(res, { podId, eventId: event.id, talks: (talks || []).map((s) => s.toJSON()) });
+    }
+
     if (pathname.startsWith("/api/pods/") && pathname.endsWith("/facilitator") && method === "POST") {
       const parts = pathname.split("/");
       const podId = parts[3];

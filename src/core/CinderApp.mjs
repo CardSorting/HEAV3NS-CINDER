@@ -109,7 +109,7 @@ export class CinderApp {
       this.messageRepo = new ElasticsearchMessageRepository({ esClient: es, index: idx.messages, defaultEventId, toEntity: ENTITY.message });
       this.podRepo = new ElasticsearchPodRepository({ esClient: es, index: idx.pods, messageRepo: this.messageRepo, defaultEventId, toEntity: ENTITY.pod });
       this.interactionRepo = new ElasticsearchInteractionRepository({ esClient: es, index: idx.interactions, defaultEventId, toEntity: ENTITY.match });
-      this.agendaRepo = new ElasticsearchAgendaRepository({ esClient: es, index: idx.sessions, toEntity: ENTITY.session });
+      this.agendaRepo = new ElasticsearchAgendaRepository({ esClient: es, index: idx.sessions, toEntity: ENTITY.session, embedModel: this.config.embedModel });
       this.spaceRepo = new ElasticsearchSpaceRepository({ esClient: es, index: idx.spaces, eventsIndex: idx.events, toEntity: ENTITY.space });
       this.announcementRepo = new ElasticsearchAnnouncementRepository({ esClient: es, index: idx.announcements, toEntity: ENTITY.announcement });
       this.promptRepo = new ElasticsearchPromptRepository({ esClient: es, index: idx.prompts, embedModel: this.config.embedModel });

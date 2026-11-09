@@ -138,6 +138,7 @@ describe("CinderApp composition root", () => {
     const alert = await app.facilitatorCtrl.triggerAgendaAlert(pod.id);
     const next = alert.metadata.session;
     assert.strictEqual(next.startTime, "13:30", "next content session after 11:45 (lunch is not content)");
+    assert.match(alert.content, /starts at 1:30 PM in /, "same-day alerts show the local time");
     assert.ok(Date.parse(next.startDate) > clock.nowMs());
     const prompt = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
     const seedPrompts = (await app.promptRepo.listByPhase("deep-dive")).map((x) => x.text);

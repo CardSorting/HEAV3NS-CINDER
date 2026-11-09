@@ -346,3 +346,17 @@ describe("ElasticsearchPromptRepository topic fusion", () => {
   });
 });
 
+describe("ElasticsearchAgendaRepository relevant talks", () => {
+  it("fuses the pod centroid with its theme text (weights 1 / 2), upcoming content sessions only", async () => {
+    const es = fakeClient({ search: () => [] });
+    const repo = new ElasticsearchAgendaRepository({ esClient: es, index: "cinder-sessions", embedModel: ".m" });
+    await repo.findRelevant(EV, vec(), { afterMs: 5, limit: 3, text: "Runbook Automation & SLOs" });
+    const rrf = es.of("search")[0].body.retriever.rrf;
+    assert.deepStrictEqual(rrf.retrievers.map((r) => r.weight), [1, 2]);
+    assert.strictEqual(rrf.retrievers[1].retriever.knn.query_vector_builder.text_embedding.model_text, "Talks about Runbook Automation & SLOs");
+    const filters = rrf.retrievers[0].retriever.knn.filter.bool.filter;
+    assert.deepStrictEqual(filters[0], { term: { eventId: EV } });
+    assert.deepStrictEqual(filters[2], { range: { startDate: { gte: 5, format: "epoch_millis" } } });
+  });
+});
+

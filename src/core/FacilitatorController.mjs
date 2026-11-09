@@ -3,7 +3,7 @@
 import { Message } from "../domain/message.mjs";
 import { generatePrefixedId } from "../plumbing/idGenerator.mjs";
 import { CONTENT_SESSION_TYPES } from "../plumbing/sessionTypes.mjs";
-import { slotSummary } from "../domain/meetupTime.mjs";
+import { slotSummary, displayTime } from "../domain/meetupTime.mjs";
 
 /**
  * Controller for Milestone 5: Proactive AI Facilitator.
@@ -85,13 +85,47 @@ export class FacilitatorController {
   }
 
   /**
-   * The session an agenda alert is about: the requested one if it belongs to the Pod's event, else the next
-   * content session (talk, keynote, workshop…) starting after the clock, else the event's last one.
+   * Upcoming talks most relevant to a Pod: kNN against its centroid fused with its theme, limited to content
+   * sessions of its event starting after the clock. Pods without a centroid get the next talks by time.
+   * @param {string} podId
+   * @param {Object} [options]
+   * @param {number} [options.limit=3]
+   * @returns {Promise<import("../domain/agenda.mjs").Session[]|null>} null when the Pod does not exist
    */
-  async resolveAlertSession(eventId, sessionId) {
+  async relevantTalks(podId, { limit = 3 } = {}) {
+    const pod = await this.podRepo.findById(podId);
+    if (!pod) return null;
+    return this.relevantTalksFor(pod, limit);
+  }
+
+  async relevantTalksFor(pod, limit = 3) {
+    const eventId = pod.eventId || this.defaultEventId;
+    const now = this.clock.nowMs();
+    if (Array.isArray(pod.centroid) && pod.centroid.length) {
+      try {
+        const talks = await this.agendaRepo.findRelevant(eventId, pod.centroid, { afterMs: now, limit, text: pod.topic });
+        if (talks.length) return talks;
+      } catch {
+        // fall through to time order
+      }
+    }
+    return (await this.agendaRepo.listByEvent(eventId))
+      .filter((s) => CONTENT_SESSION_TYPES.includes(s.sessionType) && (s.startsAtMs() ?? 0) >= now)
+      .slice(0, limit);
+  }
+
+  /**
+   * The session an agenda alert is about: the requested one, else the upcoming session most relevant to the
+   * Pod, else the next content session after the clock, else the event's last one.
+   */
+  async resolveAlertSession(eventId, sessionId, pod = null) {
     if (sessionId) {
       const requested = await this.agendaRepo.findById(sessionId);
       if (requested) return requested;
+    }
+    if (pod) {
+      const [relevant] = await this.relevantTalksFor(pod, 1);
+      if (relevant) return relevant;
     }
     const content = (await this.agendaRepo.listByEvent(eventId)).filter((s) => CONTENT_SESSION_TYPES.includes(s.sessionType));
     const now = this.clock.nowMs();
@@ -150,11 +184,14 @@ export class FacilitatorController {
     const pod = await this.podRepo.findById(podId);
     if (!pod) return null;
 
-    const sessionEntity = await this.resolveAlertSession(pod.eventId || this.defaultEventId, sessionId);
+    const sessionEntity = await this.resolveAlertSession(pod.eventId || this.defaultEventId, sessionId, pod);
     if (!sessionEntity) return null;
     const session = sessionEntity.toJSON();
     const prompt = await this.promptFor(pod);
-    const notif = await this.facilitatorService.generateAgendaNotification(pod, session, { prompt: prompt?.text });
+    const startsLabel = session.startDate && session.timezone
+      ? displayTime(session.startDate, this.clock.nowMs(), session.timezone)
+      : session.startTime;
+    const notif = await this.facilitatorService.generateAgendaNotification(pod, session, { prompt: prompt?.text, startsLabel });
 
     const message = new Message({
       id: generatePrefixedId("msg_agenda"),

@@ -100,9 +100,9 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
    * @param {import("../domain/pod.mjs").Pod} _pod
    * @param {any} session
    */
-  async generateAgendaNotification(_pod, session, { prompt = FALLBACK_PROMPT } = {}) {
+  async generateAgendaNotification(_pod, session, { prompt = FALLBACK_PROMPT, startsLabel } = {}) {
     const alertMessage =
-      `⏰ Upcoming Conference Highlight: "${session.title}" starts at ${session.startTime} in ${session.room}.\n` +
+      `⏰ Upcoming Conference Highlight: "${session.title}" starts ${startsLabel ? (/^\d/.test(startsLabel) ? `at ${startsLabel}` : startsLabel) : `at ${session.startTime}`} in ${session.room}.\n` +
       `Featuring: ${session.speakers.join(", ")}. Perfect alignment with this Pod's focus.`;
 
     return {

@@ -277,5 +277,15 @@ describe("CinderWebServer HTTP & API Routes", () => {
       assert.ok(agenda.venues.length >= 4 && agenda.venues.every((v) => v.id && v.name && v.tag));
       assert.ok(agenda.prompts.length >= 3 && agenda.prompts.every((x) => typeof x === "string"));
     });
+
+    it("lists upcoming talks relevant to a pod", async () => {
+      const pod = await (await fetch(`${baseUrl}/api/pods/compose`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 3 }) })).json();
+      const res = await (await fetch(`${baseUrl}/api/pods/${pod.id}/talks?limit=2`)).json();
+      assert.strictEqual(res.podId, pod.id);
+      assert.strictEqual(res.talks.length, 2);
+      assert.ok(res.talks.every((s) => ["keynote", "talk", "workshop", "panel"].includes(s.sessionType)), "content sessions only");
+      assert.strictEqual((await fetch(`${baseUrl}/api/pods/pod_nope/talks`)).status, 404);
+    });
   });
 });

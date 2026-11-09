@@ -84,8 +84,13 @@ export function parseClockTime(text) {
   return { hours, minutes };
 }
 
-/** "12:15 PM" today; "Thu 10:20 AM" within the week; "Dec 23, 12:15 PM" further out (event timezone). */
-function displayTime(iso, nowMs, tz) {
+/**
+ * "12:15 PM" today; "Thu 10:20 AM" within the week; "Dec 23, 12:15 PM" further out (event timezone).
+ * @param {string} iso
+ * @param {number} nowMs
+ * @param {string} tz - IANA timezone
+ */
+export function displayTime(iso, nowMs, tz) {
   const day = (ms) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
   const ms = Date.parse(iso);
   const time = formatLocalTime(iso, tz);

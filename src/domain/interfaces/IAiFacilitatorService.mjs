@@ -39,6 +39,7 @@ export class IAiFacilitatorService {
    * @param {any} _currentOrUpcomingSession
    * @param {Object} [_context]
    * @param {string} [_context.prompt] - discussion prompt chosen for the Pod
+   * @param {string} [_context.startsLabel] - when the session starts relative to now ("12:15 PM", "Thu 1:30 PM")
    * @returns {Promise<{ alertMessage: string, discussionPrompt: string }>}
    */
   async generateAgendaNotification(_pod, _currentOrUpcomingSession, _context) {
