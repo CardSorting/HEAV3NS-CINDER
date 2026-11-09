@@ -21,8 +21,8 @@ export class IAiFacilitatorService {
    * @param {import("../pod.mjs").Pod} _pod
    * @param {string} _text
    * @param {Object} [_context]
-   * @param {Array<{ id: string, name: string }>} [_context.spaces] - meetup spaces available at the Pod's event
-   * @returns {Promise<{ isMeetupProposal: boolean, location?: string, time?: string, confirmationMessage?: string }>}
+   * @param {import("../venueSpace.mjs").VenueSpace[]} [_context.spaces] - meetup spaces available at the Pod's event
+   * @returns {Promise<{ isMeetupProposal: boolean, location?: string, spaceId?: string|null, time?: string, confirmationMessage?: string }>}
    */
   async evaluateMeetupIntent(_pod, _text, _context) {
     throw new Error("IAiFacilitatorService.evaluateMeetupIntent must be implemented by an infrastructure adapter.");

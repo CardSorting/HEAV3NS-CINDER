@@ -159,4 +159,24 @@ describe("CinderApp composition root", () => {
     assert.deepStrictEqual(probes, [5000, 5000]);
     assert.strictEqual(app.mode, "live", "a cold first probe does not drop the app to offline");
   });
+
+  it("resolves meetup locations from the event's space aliases", async () => {
+    const app = new CinderApp({ clock });
+    await app.initialize();
+    const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 4 });
+    const cases = [
+      ["Shall we meet at the tech cafe for lunch?", "Tech Cafe (Booth 4)", "loc_tech_cafe"],
+      ["lunch on the patio?", "Main Hall East Patio", "loc_east_patio"],
+      ["meet in the garden lounge after the keynote", "Garden Networking Lounge", "loc_garden_lounge"]
+    ];
+    for (const [text, name, spaceId] of cases) {
+      await app.commCtrl.sendMessage({ podId: pod.id, senderId: "att_alex_chen", content: text });
+      const pinned = (await app.podRepo.findById(pod.id)).pinnedMeetup;
+      assert.strictEqual(pinned.location, name, text);
+      assert.strictEqual(pinned.spaceId, spaceId, text);
+    }
+    const before = (await app.podRepo.findById(pod.id)).messages.length;
+    await app.commCtrl.sendMessage({ podId: pod.id, senderId: "att_alex_chen", content: "Great talk this morning!" });
+    assert.strictEqual((await app.podRepo.findById(pod.id)).messages.length, before + 1, "no meetup confirmation for small talk");
+  });
 });

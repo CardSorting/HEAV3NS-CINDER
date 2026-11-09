@@ -86,10 +86,11 @@ export class CommunicationController {
     // Check if message triggers meetup coordination
     if (senderType === "attendee") {
       const eventId = pod.eventId || this.defaultEventId;
-      const spaces = this.spaceRepo && eventId ? await this.spaceRepo.listForEvent(eventId, { meetupFriendlyOnly: true }) : [];
+      // All of the venue's spaces: people name rooms as landmarks ("meet outside room 2.04").
+      const spaces = this.spaceRepo && eventId ? await this.spaceRepo.listForEvent(eventId) : [];
       const meetupIntent = await this.facilitatorService.evaluateMeetupIntent(pod, content, { spaces });
       if (meetupIntent.isMeetupProposal && meetupIntent.location) {
-        pod.pinMeetup(meetupIntent.location, meetupIntent.time || "12:15 PM", true);
+        pod.pinMeetup(meetupIntent.location, meetupIntent.time || "12:15 PM", true, { spaceId: meetupIntent.spaceId || null });
         await this.podRepo.save(pod);
 
         // Send confirmation message from facilitator
@@ -104,6 +105,7 @@ export class CommunicationController {
           metadata: {
             meetupConfirmed: true,
             location: meetupIntent.location,
+            spaceId: meetupIntent.spaceId || null,
             time: meetupIntent.time
           }
         });

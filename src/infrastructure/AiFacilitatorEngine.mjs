@@ -49,24 +49,27 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
    */
   async evaluateMeetupIntent(_pod, text, { spaces = [] } = {}) {
     const lower = text.toLowerCase();
-    const isMeetupKeyword =
-      lower.includes("meet") ||
-      lower.includes("lunch") ||
-      lower.includes("patio") ||
-      lower.includes("cafe") ||
-      lower.includes("where");
 
-    if (!isMeetupKeyword) {
+    // The most specific space the message names, matched on the space's name and aliases
+    // ("patio" -> East Terrace, "outside room 2.04" -> Room 2.04). Spaces are VenueSpace entities.
+    let mentioned = null;
+    let bestScore = 0;
+    for (const space of spaces) {
+      const score = typeof space.mentionedIn === "function"
+        ? space.mentionedIn(text)
+        : (lower.includes(String(space.name).toLowerCase()) ? String(space.name).length : 0);
+      if (score > bestScore) {
+        mentioned = space;
+        bestScore = score;
+      }
+    }
+
+    const isMeetupKeyword = /\b(meet|meetup|lunch|coffee|where|grab|catch up)\b/.test(lower);
+    if (!isMeetupKeyword && !(mentioned && /\b(at|in|on|by|near|outside)\b/.test(lower))) {
       return { isMeetupProposal: false };
     }
 
-    let detectedLocation = "Main Hall East Patio";
-    for (const loc of spaces) {
-      if (lower.includes(loc.name.toLowerCase()) || lower.includes(String(loc.id).replace("loc_", "").toLowerCase())) {
-        detectedLocation = loc.name;
-        break;
-      }
-    }
+    const detectedLocation = mentioned ? mentioned.name : "Main Hall East Patio";
 
     const time = "12:15 PM";
     const confirmationMessage =
@@ -76,6 +79,7 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
     return {
       isMeetupProposal: true,
       location: detectedLocation,
+      spaceId: mentioned ? mentioned.id : null,
       time,
       confirmationMessage
     };
