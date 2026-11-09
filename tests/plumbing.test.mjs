@@ -7,6 +7,7 @@ import { dotProduct, magnitude, cosineSimilarity, normalizeVector, vectorCentroi
 import { tokenizeText, calculateTermFrequencies, computeBM25Score } from "../src/plumbing/bm25Scorer.mjs";
 import { reciprocalRankFusion } from "../src/plumbing/rrfRanker.mjs";
 import { generateDenseEmbedding } from "../src/plumbing/textEmbedder.mjs";
+import { createClock, clockFromEnv, minutesUntil, formatLocalTime } from "../src/plumbing/clock.mjs";
 import { parseDotenv, mergeEnv, resolveElasticConfig, loadElasticConfig, redactElasticConfig } from "../src/plumbing/elasticConfig.mjs";
 
 describe("Vector Math Plumbing", () => {
@@ -150,5 +151,44 @@ describe("Elasticsearch Config Plumbing", () => {
     const red = redactElasticConfig(resolveElasticConfig({ ES_URL: "https://x", ES_API_KEY: "SW9uTHdhRUI4" }));
     assert.ok(!red.apiKey.includes("THdhRUI4"));
     assert.strictEqual(red.url, "https://x");
+  });
+});
+
+describe("Clock Plumbing", () => {
+  it("uses the injected system time in real mode", () => {
+    const clock = createClock({ systemNow: () => 1_000 });
+    assert.strictEqual(clock.isDemo, false);
+    assert.strictEqual(clock.nowMs(), 1_000);
+  });
+
+  it("starts at the demo time and advances with real elapsed time", () => {
+    let sys = 5_000;
+    const clock = createClock({ demoTime: "2026-11-10T11:55:00-06:00", systemNow: () => sys });
+    assert.strictEqual(clock.isDemo, true);
+    assert.strictEqual(clock.toISOString(), "2026-11-10T17:55:00.000Z");
+    sys += 5 * 60_000;
+    assert.strictEqual(clock.toISOString(), "2026-11-10T18:00:00.000Z");
+  });
+
+  it("stays fixed when frozen", () => {
+    let sys = 0;
+    const clock = createClock({ demoTime: "2026-11-10T12:00:00Z", frozen: true, systemNow: () => sys });
+    sys += 3_600_000;
+    assert.strictEqual(clock.toISOString(), "2026-11-10T12:00:00.000Z");
+  });
+
+  it("builds from env and computes minutes until a target", () => {
+    const clock = clockFromEnv({ CINDER_DEMO_TIME: "2026-11-10T12:10:00-06:00", CINDER_DEMO_FROZEN: "true" });
+    assert.strictEqual(clock.frozen, true);
+    assert.strictEqual(minutesUntil(clock, "2026-11-10T12:15:00-06:00"), 5);
+    assert.strictEqual(clockFromEnv({}).isDemo, false);
+  });
+
+  it("formats local wall-clock time in the event timezone", () => {
+    assert.strictEqual(formatLocalTime("2026-11-10T18:15:00Z", "America/Chicago"), "12:15 PM");
+  });
+
+  it("rejects invalid times", () => {
+    assert.throws(() => createClock({ demoTime: "not a date" }));
   });
 });
