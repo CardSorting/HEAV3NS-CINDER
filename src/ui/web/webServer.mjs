@@ -266,7 +266,7 @@ export class CinderWebServer {
         ? body.seedAttendeeIds
         : ["att_alex_chen", "att_maya_lin"];
       for (const id of seedAttendeeIds) await this.attendeeIn(event, id);
-      const theme = body.theme || "Autonomous Cloud & Systems";
+      const theme = body.theme || undefined; // omitted -> derived from the members' shared interests
       const targetSize = Number(body.targetSize) || 5;
       const pod = await this.app.podCtrl.composePod({ seedAttendeeIds, theme, targetSize, eventId: event.id });
       await this.app.facilitatorCtrl.welcomePod(pod.id);

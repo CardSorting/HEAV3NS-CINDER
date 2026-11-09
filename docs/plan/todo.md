@@ -43,7 +43,7 @@
 [x] Evaluate discovery quality on the demo event with a fixed set of attendees and tune retriever weights and rank window size
 [x] Rewrite PodOrchestrationController candidate retrieval to use Elasticsearch kNN around the seed attendees' centroid filtered by eventId
 [x] Enforce discipline diversity in pod composition using the registration discipline field and existing mutual matches as anchors
-[ ] Store the pod centroid vector and compositionMeta on cinder-pods and derive the pod name and theme from shared interests
+[x] Store the pod centroid vector and compositionMeta on cinder-pods and derive the pod name and theme from shared interests
 [ ] Replace SEED_CONFERENCE_AGENDA, VENUE_LOCATIONS and DISCUSSION_PROMPTS usage in CinderApp, FacilitatorController and AiFacilitatorEngine with the Elasticsearch repositories
 [ ] Make GET /api/agenda return sessions, meetup venues and prompts for the selected event in the existing response shape
 [ ] Resolve meetup locations in evaluateMeetupIntent by matching message text against cinder-spaces aliases for the event venue

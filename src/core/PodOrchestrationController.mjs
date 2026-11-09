@@ -4,7 +4,7 @@ import { Pod } from "../domain/pod.mjs";
 import { formatPodName, generatePrefixedId } from "../plumbing/idGenerator.mjs";
 import { vectorCentroid } from "../plumbing/vectorMath.mjs";
 import { generateDenseEmbedding } from "../plumbing/textEmbedder.mjs";
-import { selectPodMembers, disciplineOf } from "../domain/podComposition.mjs";
+import { selectPodMembers, disciplineOf, derivePodTheme } from "../domain/podComposition.mjs";
 
 /**
  * Controller for Milestone 3: Automatic Pod Composition & Orchestration.
@@ -36,14 +36,14 @@ export class PodOrchestrationController {
    * Composes a Pod around seed attendees or a theme using Elasticsearch hybrid search ranking.
    * @param {Object} params
    * @param {string[]} [params.seedAttendeeIds=[]]
-   * @param {string} [params.theme="Autonomous Cloud & Systems"]
+   * @param {string} [params.theme] - explicit Pod theme; when omitted it is derived from the members' shared interests
    * @param {number} [params.targetSize=5]
    * @param {string} [params.eventId] - event the pod belongs to (defaults to the first seed attendee's event)
    * @returns {Promise<Pod>}
    */
   async composePod({
     seedAttendeeIds = [],
-    theme = "Autonomous Cloud & Systems",
+    theme = null,
     targetSize = 5,
     eventId = null
   }) {
@@ -82,7 +82,7 @@ export class PodOrchestrationController {
         ...(p.topics || []),
         ...(p.expertise || [])
       ]);
-      const queryText = [theme, ...seedKeywords].filter(Boolean).join(" ");
+      const queryText = [theme || "", ...seedKeywords].filter(Boolean).join(" ");
       const seedVectors = seedProfiles
         .map((p) => p.embedding)
         .filter((v) => Array.isArray(v) && v.length > 0);
@@ -135,19 +135,34 @@ export class PodOrchestrationController {
 
     const selectedIds = new Set(selection.members.map((m) => m.id));
     const memberIds = Array.from(selectedIds);
+
+    // Members with their stored vectors: used for the theme, the Pod centroid and the facilitator welcome.
+    const memberEntities = [];
+    for (const mid of memberIds) {
+      const att = await this.attendeeRepo.findById(mid, { includeVectors: true });
+      if (att) memberEntities.push(att);
+    }
+    const podTheme = theme || derivePodTheme(memberEntities);
+    const memberVectors = memberEntities.map((m) => m.embedding).filter((v) => Array.isArray(v) && v.length > 0);
+    const dims = memberVectors[0]?.length || 0;
+    const sameSize = memberVectors.filter((v) => v.length === dims);
+
     const podId = generatePrefixedId("pod");
-    const podName = formatPodName(this.podSequence++, theme);
+    const podName = formatPodName(this.podSequence++, podTheme);
 
     const pod = new Pod({
       id: podId,
       name: podName,
-      topic: theme,
+      topic: podTheme,
       memberIds,
       eventId: podEventId
     });
+    // Normalized centroid of the members' profile vectors (stored on cinder-pods; used for prompts and talks).
+    pod.centroid = sameSize.length ? vectorCentroid(sameSize) : null;
 
     pod.compositionMeta = {
-      theme,
+      theme: podTheme,
+      themeSource: theme ? "requested" : "shared-interests",
       seedAttendeeIds: [...seedAttendeeIds],
       candidateRankings,
       disciplines: selection.disciplines,
@@ -161,19 +176,13 @@ export class PodOrchestrationController {
     // Persist Pod
     await this.podRepo.save(pod);
 
-    // Retrieve full member objects for facilitator welcome intro
-    const memberEntities = [];
-    for (const mid of memberIds) {
-      const att = await this.attendeeRepo.findById(mid);
-      if (att) memberEntities.push(att);
-    }
-
     // Trigger AI Facilitator to generate welcoming intro
     const welcomeIntro = await this.facilitatorService.generateWelcomeIntro(pod, memberEntities);
 
     this.eventBus.publish("pod.formed", {
       pod: pod.toJSON(),
-      members: memberEntities.map((m) => m.toJSON()),
+      // Vectors stay server-side: they are large and not needed by clients.
+      members: memberEntities.map((m) => ({ ...m.toJSON(), embedding: undefined })),
       welcomeIntro,
       candidateRankings
     });

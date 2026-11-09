@@ -248,5 +248,17 @@ describe("CinderWebServer HTTP & API Routes", () => {
       const stored = (await (await fetch(`${baseUrl}/api/pods`)).json()).find((p) => p.id === pod.id);
       assert.deepStrictEqual(stored.pinnedMeetup.rsvps, ["att_alex_chen"]);
     });
+
+    it("derives the pod theme from members' shared interests when none is requested", async () => {
+      const pod = await (await fetch(`${baseUrl}/api/pods/compose`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 4 }) })).json();
+      assert.strictEqual(pod.compositionMeta.themeSource, "shared-interests");
+      assert.ok(pod.topic.includes("Kubernetes"), `theme from shared interests, got "${pod.topic}"`);
+      assert.ok(pod.name.endsWith(pod.topic));
+      const requested = await (await fetch(`${baseUrl}/api/pods/compose`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seedAttendeeIds: ["att_alex_chen"], theme: "Autonomous Cloud & Systems", targetSize: 3 }) })).json();
+      assert.strictEqual(requested.topic, "Autonomous Cloud & Systems");
+      assert.strictEqual(requested.compositionMeta.themeSource, "requested");
+    });
   });
 });

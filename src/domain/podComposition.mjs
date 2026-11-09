@@ -26,6 +26,33 @@ export function disciplineOf(profile) {
 }
 
 /**
+ * Names a Pod after what its members share: the interests (and topics) held by the most members,
+ * e.g. "Kubernetes & Observability". Only interests shared by at least two members count; otherwise the
+ * most common single interest is used, else `fallback`.
+ * @param {Array<{ interests?: string[], topics?: string[] }>} members
+ * @param {string} [fallback="Shared Interests"]
+ * @returns {string}
+ */
+export function derivePodTheme(members, fallback = "Shared Interests") {
+  const counts = new Map();
+  for (const m of members) {
+    const seen = new Set();
+    for (const raw of [...(m.interests || []), ...(m.topics || [])]) {
+      const key = String(raw).trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const entry = counts.get(key) || { label: String(raw).trim(), n: 0 };
+      entry.n++;
+      counts.set(key, entry);
+    }
+  }
+  const ranked = [...counts.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+  const shared = ranked.filter((e) => e.n >= 2).slice(0, 2).map((e) => e.label);
+  if (shared.length) return shared.join(" & ");
+  return ranked[0]?.label || fallback;
+}
+
+/**
  * Selects Pod members in order: seeds, then anchors (the seeds' mutual matches), then the ranked
  * candidates, allowing at most `maxPerDiscipline` members per discipline. If that leaves the Pod short,
  * the cap is relaxed and the best remaining candidates fill it.

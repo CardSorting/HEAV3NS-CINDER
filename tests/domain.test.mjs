@@ -19,7 +19,7 @@ import { IAnnouncementRepository } from "../src/domain/interfaces/IAnnouncementR
 import { IPromptRepository } from "../src/domain/interfaces/IPromptRepository.mjs";
 import { IInteractionRepository } from "../src/domain/interfaces/IInteractionRepository.mjs";
 import { IMessageRepository } from "../src/domain/interfaces/IMessageRepository.mjs";
-import { selectPodMembers, disciplineOf } from "../src/domain/podComposition.mjs";
+import { selectPodMembers, disciplineOf, derivePodTheme } from "../src/domain/podComposition.mjs";
 import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
 
 describe("Domain Entities", () => {
@@ -386,6 +386,20 @@ describe("Pod composition diversity", () => {
     assert.strictEqual(disciplineOf({ title: "Senior Platform Engineer" }), "platform");
     assert.strictEqual(disciplineOf({ title: "Principal Observability Architect" }), "observability architect");
     assert.strictEqual(disciplineOf({}), "unknown");
+  });
+});
+
+describe("Pod theme from shared interests", () => {
+  it("uses the two interests shared by the most members (case-insensitive)", () => {
+    const theme = derivePodTheme([
+      { interests: ["Kubernetes", "eBPF"] }, { interests: ["kubernetes", "Observability"] },
+      { interests: ["Observability", "Kubernetes"] }, { interests: ["Go"], topics: ["eBPF"] }
+    ]);
+    assert.strictEqual(theme, "Kubernetes & eBPF");
+  });
+  it("falls back to the most common single interest, then the fallback", () => {
+    assert.strictEqual(derivePodTheme([{ interests: ["Go"] }, { interests: ["Rust"] }]), "Go");
+    assert.strictEqual(derivePodTheme([], "Conference connections"), "Conference connections");
   });
 });
 
