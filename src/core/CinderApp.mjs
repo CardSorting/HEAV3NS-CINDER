@@ -12,7 +12,12 @@ import { PodOrchestrationController } from "./PodOrchestrationController.mjs";
 import { CommunicationController } from "./CommunicationController.mjs";
 import { FacilitatorController } from "./FacilitatorController.mjs";
 
-import { SEED_ATTENDEES, SEED_CONFERENCE_AGENDA } from "../plumbing/conferenceSeedData.mjs";
+import {
+  SEED_ATTENDEES,
+  SEED_CONFERENCE_AGENDA,
+  VENUE_LOCATIONS,
+  DISCUSSION_PROMPTS
+} from "../plumbing/conferenceSeedData.mjs";
 
 /**
  * CINDER Application Container & Composition Root.
@@ -67,6 +72,8 @@ export class CinderApp {
     });
 
     this.agenda = SEED_CONFERENCE_AGENDA;
+    this.venues = VENUE_LOCATIONS;
+    this.discussionPrompts = DISCUSSION_PROMPTS;
     this.initialized = false;
   }
 
