@@ -39,13 +39,7 @@ import { FacilitatorController } from "./FacilitatorController.mjs";
 import { EventController } from "./EventController.mjs";
 
 import { createClock } from "../plumbing/clock.mjs";
-import {
-  SEED_ATTENDEES,
-  SEED_CONFERENCE_AGENDA,
-  SEED_EVENT,
-  VENUE_LOCATIONS,
-  DISCUSSION_PROMPTS
-} from "../plumbing/conferenceSeedData.mjs";
+import { SEED_ATTENDEES, SEED_EVENT } from "../plumbing/conferenceSeedData.mjs";
 
 /** Entity factories injected into the adapters (infrastructure never imports concrete domain code). */
 const ENTITY = Object.freeze({
@@ -167,19 +161,22 @@ export class CinderApp {
       eventBus: this.eventBus,
       facilitatorService: this.facilitatorService,
       messageRepo: this.messageRepo,
-      interactionRepo: this.interactionRepo
+      interactionRepo: this.interactionRepo,
+      spaceRepo: this.spaceRepo,
+      defaultEventId: this.defaultEventId
     });
 
     this.facilitatorCtrl = new FacilitatorController({
       podRepo: this.podRepo,
       attendeeRepo: this.attendeeRepo,
       eventBus: this.eventBus,
-      facilitatorService: this.facilitatorService
+      facilitatorService: this.facilitatorService,
+      agendaRepo: this.agendaRepo,
+      promptRepo: this.promptRepo,
+      spaceRepo: this.spaceRepo,
+      clock: this.clock,
+      defaultEventId: this.defaultEventId
     });
-
-    this.agenda = SEED_CONFERENCE_AGENDA;
-    this.venues = VENUE_LOCATIONS;
-    this.discussionPrompts = DISCUSSION_PROMPTS;
   }
 
   /**
@@ -221,6 +218,7 @@ export class CinderApp {
     const esStatus = await this.esClient.getStatus();
     const attendees = await this.attendeeRepo.listAll();
     const pods = await this.podRepo.listAll();
+    const sessions = this.defaultEventId ? await this.agendaRepo.listByEvent(this.defaultEventId) : [];
 
     return {
       appName: "CINDER",
@@ -236,7 +234,7 @@ export class CinderApp {
       elasticsearch: esStatus,
       attendeeCount: attendees.length,
       podCount: pods.length,
-      agendaSessionsCount: this.agenda.length
+      agendaSessionsCount: sessions.length
     };
   }
 }

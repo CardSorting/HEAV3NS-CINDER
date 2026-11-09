@@ -129,4 +129,23 @@ describe("CinderApp composition root", () => {
     assert.deepStrictEqual(pod.memberIds, ["att_a", "att_b", "att_c"]);
     assert.strictEqual(pod.eventId, DEMO);
   });
+
+  it("facilitator uses the agenda, prompt and space repositories with the clock", async () => {
+    const app = new CinderApp({ clock });   // offline seed event, demo clock frozen at 11:45 local
+    await app.initialize();
+    const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 4 });
+    const alert = await app.facilitatorCtrl.triggerAgendaAlert(pod.id);
+    const next = alert.metadata.session;
+    assert.strictEqual(next.startTime, "13:30", "next content session after 11:45 (lunch is not content)");
+    assert.ok(Date.parse(next.startDate) > clock.nowMs());
+    const prompt = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
+    const seedPrompts = (await app.promptRepo.listByPhase("deep-dive")).map((x) => x.text);
+    assert.ok(seedPrompts.some((p) => prompt.content.includes(p)), "prompt comes from the prompt repository");
+    const explicit = await app.facilitatorCtrl.triggerAgendaAlert(pod.id, "session_02");
+    assert.strictEqual(explicit.metadata.session.id, "session_02");
+    const agenda = await app.facilitatorCtrl.getAgenda(app.defaultEventId);
+    assert.strictEqual(agenda.sessions.length, 5);
+    assert.strictEqual(agenda.venues.length, 4);
+    assert.strictEqual(agenda.prompts.length, 3);
+  });
 });

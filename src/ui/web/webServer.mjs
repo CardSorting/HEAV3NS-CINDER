@@ -155,12 +155,7 @@ export class CinderWebServer {
 
     if (pathname === "/api/agenda" && method === "GET") {
       const event = await this.eventFor(url.searchParams.get("eventId"));
-      return this.sendJson(res, {
-        eventId: event.id,
-        sessions: this.app.agenda,
-        venues: this.app.venues || [],
-        prompts: this.app.discussionPrompts || []
-      });
+      return this.sendJson(res, { eventId: event.id, ...(await this.app.facilitatorCtrl.getAgenda(event.id)) });
     }
 
     if (pathname === "/api/attendees" && method === "GET") {
@@ -309,7 +304,7 @@ export class CinderWebServer {
       if (body.action === "welcome") {
         msg = await this.app.facilitatorCtrl.welcomePod(podId);
       } else if (body.action === "agenda") {
-        msg = await this.app.facilitatorCtrl.triggerAgendaAlert(podId, body.sessionId || "session_05");
+        msg = await this.app.facilitatorCtrl.triggerAgendaAlert(podId, body.sessionId);
       } else {
         msg = await this.app.facilitatorCtrl.triggerDiscussionPrompt(podId);
       }

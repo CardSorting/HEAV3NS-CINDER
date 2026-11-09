@@ -2,7 +2,7 @@
 
 import { Message } from "../domain/message.mjs";
 import { generatePrefixedId } from "../plumbing/idGenerator.mjs";
-import { SEED_CONFERENCE_AGENDA } from "../plumbing/conferenceSeedData.mjs";
+import { CONTENT_SESSION_TYPES } from "../plumbing/sessionTypes.mjs";
 
 /**
  * Controller for Milestone 5: Proactive AI Facilitator.
@@ -15,13 +15,65 @@ export class FacilitatorController {
    * @param {import("../domain/interfaces/IAttendeeRepository.mjs").IAttendeeRepository} params.attendeeRepo
    * @param {import("../domain/interfaces/IEventBus.mjs").IEventBus} params.eventBus
    * @param {import("../domain/interfaces/IAiFacilitatorService.mjs").IAiFacilitatorService} params.facilitatorService
+   * @param {import("../domain/interfaces/IAgendaRepository.mjs").IAgendaRepository} params.agendaRepo
+   * @param {import("../domain/interfaces/IPromptRepository.mjs").IPromptRepository} params.promptRepo
+   * @param {import("../domain/interfaces/ISpaceRepository.mjs").ISpaceRepository} params.spaceRepo
+   * @param {{ nowMs: () => number }} params.clock
+   * @param {string|null} [params.defaultEventId=null] - event for Pods created without one
    */
-  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService }) {
+  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService, agendaRepo, promptRepo, spaceRepo, clock, defaultEventId = null }) {
+    if (!agendaRepo || !promptRepo || !spaceRepo || !clock) {
+      throw new Error("FacilitatorController requires agendaRepo, promptRepo, spaceRepo and clock");
+    }
     this.podRepo = podRepo;
     this.attendeeRepo = attendeeRepo;
     this.eventBus = eventBus;
     this.facilitatorService = facilitatorService;
-    this.agenda = SEED_CONFERENCE_AGENDA;
+    this.agendaRepo = agendaRepo;
+    this.promptRepo = promptRepo;
+    this.spaceRepo = spaceRepo;
+    this.clock = clock;
+    this.defaultEventId = defaultEventId;
+    this.promptIndex = 0;
+  }
+
+  /**
+   * The agenda view served on /api/agenda: sessions, meetup-friendly venues and discussion prompts.
+   * @param {string} eventId
+   * @returns {Promise<{ sessions: Object[], venues: Array<{ id: string, name: string, tag: string, capacity: number }>, prompts: string[] }>}
+   */
+  async getAgenda(eventId) {
+    const [sessions, spaces, prompts] = await Promise.all([
+      this.agendaRepo.listByEvent(eventId),
+      this.spaceRepo.listForEvent(eventId, { meetupFriendlyOnly: true }),
+      this.promptRepo.listByPhase("deep-dive")
+    ]);
+    return {
+      sessions: sessions.map((s) => s.toJSON()),
+      venues: spaces.map((s) => ({ id: s.id, name: s.name, tag: s.displayTag(), capacity: s.capacity })),
+      prompts: prompts.map((p) => p.text)
+    };
+  }
+
+  /** Next discussion prompt (rotates through the deep-dive prompts). */
+  async nextPrompt() {
+    const prompts = await this.promptRepo.listByPhase("deep-dive");
+    if (!prompts.length) return undefined;
+    return prompts[this.promptIndex++ % prompts.length].text;
+  }
+
+  /**
+   * The session an agenda alert is about: the requested one if it belongs to the Pod's event, else the next
+   * content session (talk, keynote, workshop…) starting after the clock, else the event's last one.
+   */
+  async resolveAlertSession(eventId, sessionId) {
+    if (sessionId) {
+      const requested = await this.agendaRepo.findById(sessionId);
+      if (requested) return requested;
+    }
+    const content = (await this.agendaRepo.listByEvent(eventId)).filter((s) => CONTENT_SESSION_TYPES.includes(s.sessionType));
+    const now = this.clock.nowMs();
+    return content.find((s) => (s.startsAtMs() ?? 0) >= now) || content[content.length - 1] || null;
   }
 
   /**
@@ -68,14 +120,16 @@ export class FacilitatorController {
   /**
    * Broadcasts an agenda alert / session reminder to a Pod.
    * @param {string} podId
-   * @param {string} [sessionId="session_05"]
+   * @param {string} [sessionId] - defaults to the next upcoming session
    */
-  async triggerAgendaAlert(podId, sessionId = "session_05") {
+  async triggerAgendaAlert(podId, sessionId) {
     const pod = await this.podRepo.findById(podId);
     if (!pod) return null;
 
-    const session = this.agenda.find((s) => s.id === sessionId) || this.agenda[4];
-    const notif = await this.facilitatorService.generateAgendaNotification(pod, session);
+    const sessionEntity = await this.resolveAlertSession(pod.eventId || this.defaultEventId, sessionId);
+    if (!sessionEntity) return null;
+    const session = sessionEntity.toJSON();
+    const notif = await this.facilitatorService.generateAgendaNotification(pod, session, { prompt: await this.nextPrompt() });
 
     const message = new Message({
       id: generatePrefixedId("msg_agenda"),
@@ -116,7 +170,7 @@ export class FacilitatorController {
       if (att) members.push(att);
     }
 
-    const promptText = await this.facilitatorService.generateDiscussionPrompt(pod, members);
+    const promptText = await this.facilitatorService.generateDiscussionPrompt(pod, members, { prompt: await this.nextPrompt() });
 
     const message = new Message({
       id: generatePrefixedId("msg_prompt"),

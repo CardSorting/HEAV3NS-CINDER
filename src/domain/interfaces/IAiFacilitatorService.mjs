@@ -20,9 +20,11 @@ export class IAiFacilitatorService {
    * Evaluates or confirms a meetup location coordination within a Pod chat.
    * @param {import("../pod.mjs").Pod} _pod
    * @param {string} _text
+   * @param {Object} [_context]
+   * @param {Array<{ id: string, name: string }>} [_context.spaces] - meetup spaces available at the Pod's event
    * @returns {Promise<{ isMeetupProposal: boolean, location?: string, time?: string, confirmationMessage?: string }>}
    */
-  async evaluateMeetupIntent(_pod, _text) {
+  async evaluateMeetupIntent(_pod, _text, _context) {
     throw new Error("IAiFacilitatorService.evaluateMeetupIntent must be implemented by an infrastructure adapter.");
   }
 
@@ -30,9 +32,11 @@ export class IAiFacilitatorService {
    * Generates agenda alerts and timely reminders for upcoming talks or activities.
    * @param {import("../pod.mjs").Pod} _pod
    * @param {any} _currentOrUpcomingSession
+   * @param {Object} [_context]
+   * @param {string} [_context.prompt] - discussion prompt chosen for the Pod
    * @returns {Promise<{ alertMessage: string, discussionPrompt: string }>}
    */
-  async generateAgendaNotification(_pod, _currentOrUpcomingSession) {
+  async generateAgendaNotification(_pod, _currentOrUpcomingSession, _context) {
     throw new Error("IAiFacilitatorService.generateAgendaNotification must be implemented by an infrastructure adapter.");
   }
 
@@ -40,9 +44,11 @@ export class IAiFacilitatorService {
    * Generates an intelligent conversation prompt based on the group's collective interests.
    * @param {import("../pod.mjs").Pod} _pod
    * @param {import("../attendee.mjs").Attendee[]} _members
+   * @param {Object} [_context]
+   * @param {string} [_context.prompt] - discussion prompt chosen for the Pod
    * @returns {Promise<string>}
    */
-  async generateDiscussionPrompt(_pod, _members) {
+  async generateDiscussionPrompt(_pod, _members, _context) {
     throw new Error("IAiFacilitatorService.generateDiscussionPrompt must be implemented by an infrastructure adapter.");
   }
 }

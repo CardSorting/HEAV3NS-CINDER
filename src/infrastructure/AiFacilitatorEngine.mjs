@@ -1,7 +1,8 @@
 /** [LAYER: INFRASTRUCTURE] */
 
 import { IAiFacilitatorService } from "../domain/interfaces/IAiFacilitatorService.mjs";
-import { VENUE_LOCATIONS, DISCUSSION_PROMPTS } from "../plumbing/conferenceSeedData.mjs";
+
+const FALLBACK_PROMPT = "What problem did you come to this event hoping to solve, and what would 'solved' look like?";
 
 /**
  * Intelligent AI Facilitator Engine.
@@ -11,7 +12,6 @@ import { VENUE_LOCATIONS, DISCUSSION_PROMPTS } from "../plumbing/conferenceSeedD
 export class AiFacilitatorEngine extends IAiFacilitatorService {
   constructor() {
     super();
-    this.promptIndex = 0;
   }
 
   /**
@@ -47,7 +47,7 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
    * @param {import("../domain/pod.mjs").Pod} _pod
    * @param {string} text
    */
-  async evaluateMeetupIntent(_pod, text) {
+  async evaluateMeetupIntent(_pod, text, { spaces = [] } = {}) {
     const lower = text.toLowerCase();
     const isMeetupKeyword =
       lower.includes("meet") ||
@@ -61,8 +61,8 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
     }
 
     let detectedLocation = "Main Hall East Patio";
-    for (const loc of VENUE_LOCATIONS) {
-      if (lower.includes(loc.name.toLowerCase()) || lower.includes(loc.id.replace("loc_", ""))) {
+    for (const loc of spaces) {
+      if (lower.includes(loc.name.toLowerCase()) || lower.includes(String(loc.id).replace("loc_", "").toLowerCase())) {
         detectedLocation = loc.name;
         break;
       }
@@ -86,14 +86,10 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
    * @param {import("../domain/pod.mjs").Pod} _pod
    * @param {any} session
    */
-  async generateAgendaNotification(_pod, session) {
+  async generateAgendaNotification(_pod, session, { prompt = FALLBACK_PROMPT } = {}) {
     const alertMessage =
       `⏰ Upcoming Conference Highlight: "${session.title}" starts at ${session.startTime} in ${session.room}.\n` +
       `Featuring: ${session.speakers.join(", ")}. Perfect alignment with this Pod's focus.`;
-
-    const prompt =
-      DISCUSSION_PROMPTS[this.promptIndex % DISCUSSION_PROMPTS.length];
-    this.promptIndex++;
 
     return {
       alertMessage,
@@ -106,10 +102,7 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
    * @param {import("../domain/pod.mjs").Pod} pod
    * @param {import("../domain/attendee.mjs").Attendee[]} _members
    */
-  async generateDiscussionPrompt(pod, _members) {
-    const prompt =
-      DISCUSSION_PROMPTS[this.promptIndex % DISCUSSION_PROMPTS.length];
-    this.promptIndex++;
+  async generateDiscussionPrompt(pod, _members, { prompt = FALLBACK_PROMPT } = {}) {
     return `💡 Pod Discussion Prompt: ${prompt}`;
   }
 }

@@ -17,7 +17,9 @@ export class CommunicationController {
    * @param {import("../domain/interfaces/IMessageRepository.mjs").IMessageRepository} params.messageRepo - 1:1 messages
    * @param {import("../domain/interfaces/IInteractionRepository.mjs").IInteractionRepository} params.interactionRepo - matches
    */
-  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService, messageRepo, interactionRepo }) {
+  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService, messageRepo, interactionRepo, spaceRepo = null, defaultEventId = null }) {
+    this.spaceRepo = spaceRepo;
+    this.defaultEventId = defaultEventId;
     if (!messageRepo || !interactionRepo) throw new Error("CommunicationController requires messageRepo and interactionRepo");
     this.podRepo = podRepo;
     this.attendeeRepo = attendeeRepo;
@@ -83,7 +85,9 @@ export class CommunicationController {
 
     // Check if message triggers meetup coordination
     if (senderType === "attendee") {
-      const meetupIntent = await this.facilitatorService.evaluateMeetupIntent(pod, content);
+      const eventId = pod.eventId || this.defaultEventId;
+      const spaces = this.spaceRepo && eventId ? await this.spaceRepo.listForEvent(eventId, { meetupFriendlyOnly: true }) : [];
+      const meetupIntent = await this.facilitatorService.evaluateMeetupIntent(pod, content, { spaces });
       if (meetupIntent.isMeetupProposal && meetupIntent.location) {
         pod.pinMeetup(meetupIntent.location, meetupIntent.time || "12:15 PM", true);
         await this.podRepo.save(pod);
