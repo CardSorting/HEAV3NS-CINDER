@@ -76,3 +76,4 @@ export function computeBM25Score({
 
   return Number(Math.max(0, totalScore).toFixed(4));
 }
+

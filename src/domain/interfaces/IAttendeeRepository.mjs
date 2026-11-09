@@ -31,3 +31,4 @@ export class IAttendeeRepository {
     throw new Error("IAttendeeRepository.listAll must be implemented by an infrastructure adapter.");
   }
 }
+

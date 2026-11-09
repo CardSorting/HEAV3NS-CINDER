@@ -46,3 +46,4 @@ export class IAiFacilitatorService {
     throw new Error("IAiFacilitatorService.generateDiscussionPrompt must be implemented by an infrastructure adapter.");
   }
 }
+

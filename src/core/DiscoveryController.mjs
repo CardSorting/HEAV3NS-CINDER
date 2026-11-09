@@ -80,6 +80,7 @@ export class DiscoveryController {
     }
 
     return {
+      targetAttendeeId: attendeeId,
       candidates,
       esQuerySpec: esResult.querySpec,
       tookMs: esResult.tookMs,
@@ -158,3 +159,4 @@ export class DiscoveryController {
     return results;
   }
 }
+

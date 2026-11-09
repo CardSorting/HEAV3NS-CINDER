@@ -47,4 +47,14 @@ export class IElasticsearchClient {
   async getStatus() {
     throw new Error("IElasticsearchClient.getStatus must be implemented by an infrastructure adapter.");
   }
+
+  /**
+   * Fast health check probe for Elasticsearch cluster.
+   * @param {number} [_timeoutMs]
+   * @returns {Promise<{ live: boolean, status: string, mode: string }>}
+   */
+  async checkHealth(_timeoutMs) {
+    throw new Error("IElasticsearchClient.checkHealth must be implemented by an infrastructure adapter.");
+  }
 }
+

@@ -80,3 +80,4 @@ export class CheckInController {
     return this.attendeeRepo.listAll();
   }
 }
+

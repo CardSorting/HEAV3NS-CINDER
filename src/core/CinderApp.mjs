@@ -101,6 +101,7 @@ export class CinderApp {
     return {
       appName: "CINDER",
       tagline: "The Social Infrastructure for Conferences",
+      status: "healthy",
       elasticsearch: esStatus,
       attendeeCount: attendees.length,
       podCount: pods.length,
@@ -108,3 +109,4 @@ export class CinderApp {
     };
   }
 }
+

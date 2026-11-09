@@ -23,6 +23,13 @@ describe("ElasticsearchClient Adapter", () => {
     assert.strictEqual(status.clusterName, "cinder-es-cluster");
   });
 
+  it("performs fast health check probe with bounded latency", async () => {
+    const health = await esClient.checkHealth(150);
+    assert.ok(health.mode);
+    assert.ok(health.status);
+    assert.ok(health.latencyMs >= 0);
+  });
+
   it("indexes attendee and executes hybrid search", async () => {
     const v1 = generateDenseEmbedding("kubernetes autonomous platform", ["k8s"]);
     const attendeeDoc = {

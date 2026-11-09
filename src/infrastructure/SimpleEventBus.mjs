@@ -50,3 +50,4 @@ export class SimpleEventBus extends IEventBus {
     this.listeners.clear();
   }
 }
+

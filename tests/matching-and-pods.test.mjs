@@ -54,6 +54,9 @@ describe("CINDER Matching and Pod Orchestration", () => {
 
     assert.strictEqual(pod.memberIds.length, 4);
     assert.ok(pod.name.includes("Pod"));
+    assert.ok(pod.compositionMeta);
+    assert.ok(pod.compositionMeta.candidateRankings.length >= 2);
+    assert.ok(pod.compositionMeta.candidateRankings[0].rrfScore > 0);
 
     const welcome = await app.facilitatorCtrl.welcomePod(pod.id);
     assert.ok(welcome.content.includes("Welcome to"));
@@ -93,3 +96,4 @@ describe("CINDER Matching and Pod Orchestration", () => {
     assert.ok(facMsg.content.includes("Meetup Confirmed"));
   });
 });
+

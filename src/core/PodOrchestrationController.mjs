@@ -2,10 +2,13 @@
 
 import { Pod } from "../domain/pod.mjs";
 import { formatPodName, generatePrefixedId } from "../plumbing/idGenerator.mjs";
+import { vectorCentroid } from "../plumbing/vectorMath.mjs";
+import { generateDenseEmbedding } from "../plumbing/textEmbedder.mjs";
 
 /**
  * Controller for Milestone 3: Automatic Pod Composition & Orchestration.
- * Curates 4-6 attendee groups based on semantic similarity & complementary skills.
+ * Curates 4-6 attendee groups based on semantic similarity & complementary skills
+ * using Elasticsearch Hybrid Search (BM25 + dense_vector kNN + RRF).
  */
 export class PodOrchestrationController {
   /**
@@ -26,7 +29,7 @@ export class PodOrchestrationController {
   }
 
   /**
-   * Composes a Pod around a seed attendee or theme.
+   * Composes a Pod around seed attendees or a theme using Elasticsearch hybrid search ranking.
    * @param {Object} params
    * @param {string[]} [params.seedAttendeeIds=[]]
    * @param {string} [params.theme="Autonomous Cloud & Systems"]
@@ -39,14 +42,72 @@ export class PodOrchestrationController {
     targetSize = 5
   }) {
     const selectedIds = new Set(seedAttendeeIds);
+    const candidateRankings = [];
+    let hybridQuerySpec = null;
+    let tookMs = 0;
 
-    // If we need more members to reach target size, retrieve complementary attendees
+    // If we need more members to reach target size, retrieve complementary attendees via Elasticsearch Hybrid Search
     if (selectedIds.size < targetSize) {
-      const allAttendees = await this.attendeeRepo.listAll();
-      for (const att of allAttendees) {
-        if (!selectedIds.has(att.id)) {
-          selectedIds.add(att.id);
+      const seedProfiles = [];
+      for (const sid of selectedIds) {
+        const att = await this.attendeeRepo.findById(sid);
+        if (att) seedProfiles.push(att);
+      }
+
+      // Build hybrid query keywords and dense embedding vector
+      const seedKeywords = seedProfiles.flatMap((p) => [
+        ...(p.interests || []),
+        ...(p.topics || []),
+        ...(p.expertise || [])
+      ]);
+      const queryText = [theme, ...seedKeywords].filter(Boolean).join(" ");
+
+      const seedVectors = seedProfiles
+        .map((p) => p.embedding)
+        .filter((v) => Array.isArray(v) && v.length > 0);
+
+      const queryVector = seedVectors.length > 0
+        ? vectorCentroid(seedVectors)
+        : generateDenseEmbedding(theme, seedKeywords);
+
+      // Execute Elasticsearch Hybrid Search (BM25 multi_match + dense_vector kNN + RRF)
+      const esResult = await this.esClient.hybridSearch({
+        queryText,
+        queryVector,
+        excludeIds: Array.from(selectedIds),
+        limit: Math.max(targetSize * 2, 10)
+      });
+
+      tookMs = esResult.tookMs;
+      hybridQuerySpec = esResult.querySpec;
+
+      for (const hit of esResult.hits) {
+        if (!selectedIds.has(hit.id)) {
+          selectedIds.add(hit.id);
+          candidateRankings.push({
+            id: hit.id,
+            name: hit.source?.name,
+            title: hit.source?.title,
+            company: hit.source?.company,
+            score: hit.score,
+            rrfScore: hit.rrfScore,
+            bm25Score: hit.bm25Score,
+            knnScore: hit.knnScore,
+            bm25Rank: hit.bm25Rank,
+            knnRank: hit.knnRank
+          });
           if (selectedIds.size >= targetSize) break;
+        }
+      }
+
+      // Fallback safety to guarantee reaching targetSize
+      if (selectedIds.size < targetSize) {
+        const allAttendees = await this.attendeeRepo.listAll();
+        for (const att of allAttendees) {
+          if (!selectedIds.has(att.id)) {
+            selectedIds.add(att.id);
+            if (selectedIds.size >= targetSize) break;
+          }
         }
       }
     }
@@ -61,6 +122,14 @@ export class PodOrchestrationController {
       topic: theme,
       memberIds
     });
+
+    pod.compositionMeta = {
+      theme,
+      seedAttendeeIds: [...seedAttendeeIds],
+      candidateRankings,
+      hybridQuerySpec,
+      tookMs
+    };
 
     // Persist Pod
     await this.podRepo.save(pod);
@@ -78,7 +147,8 @@ export class PodOrchestrationController {
     this.eventBus.publish("pod.formed", {
       pod: pod.toJSON(),
       members: memberEntities.map((m) => m.toJSON()),
-      welcomeIntro
+      welcomeIntro,
+      candidateRankings
     });
 
     return pod;
@@ -107,3 +177,4 @@ export class PodOrchestrationController {
     return this.podRepo.listAll();
   }
 }
+

@@ -40,3 +40,4 @@ export class IPodRepository {
     throw new Error("IPodRepository.listAll must be implemented by an infrastructure adapter.");
   }
 }
+

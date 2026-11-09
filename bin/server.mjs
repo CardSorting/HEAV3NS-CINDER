@@ -20,3 +20,4 @@ main().catch((err) => {
   console.error("Failed to start CINDER server:", err);
   process.exit(1);
 });
+

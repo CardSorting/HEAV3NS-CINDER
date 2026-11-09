@@ -34,18 +34,52 @@ export class ScenarioRunner {
     this.logs = [];
     this.stepResults = [];
 
-    // Step 1 & 2: Check-In 5 Attendees & Elasticsearch Indexing
+    // Step 1: Attendee Check-In (5 Attendees Registered)
     await this.app.initialize();
     const attendees = await this.app.attendeeRepo.listAll();
     const step1Result = this.log(
       1,
-      "Attendee Check-In & Elasticsearch Indexing",
+      "Attendee Check-In & Registration",
       {
         attendeeCount: attendees.length,
         attendees: attendees.map((a) => a.toJSON())
       }
     );
     if (onStep) onStep(step1Result);
+
+    // Step 2: Elasticsearch Vector & Text Indexing Breakdown
+    const esStatus = await this.app.esClient.getStatus();
+    const step2Result = this.log(
+      2,
+      "Elasticsearch Vector & Inverted Index Breakdown",
+      {
+        indexName: esStatus.indexName || "cinder_attendees",
+        clusterStatus: esStatus.status,
+        mode: esStatus.mode,
+        totalDocsIndexed: attendees.length,
+        mappings: {
+          embedding: {
+            type: "dense_vector",
+            dims: 32,
+            similarity: "cosine",
+            index: true
+          },
+          textFields: ["interests", "expertise", "projects", "challenges", "looking_for"],
+          keywordFields: ["company", "topics"]
+        },
+        indexedProfiles: attendees.map((a) => ({
+          id: a.id,
+          name: a.name,
+          title: a.title,
+          company: a.company,
+          interests: a.interests,
+          tokenCount: a.toSearchableText().split(/\s+/).length,
+          vectorDims: a.embedding?.length || 32,
+          vectorSample: (a.embedding || []).slice(0, 4).map((v) => Number(v.toFixed(3)))
+        }))
+      }
+    );
+    if (onStep) onStep(step2Result);
 
     // Step 3: Elasticsearch Identifies Relevant Attendee Connections
     const alex = attendees.find((a) => a.id === "att_alex_chen") || attendees[0];
@@ -58,7 +92,8 @@ export class ScenarioRunner {
         candidatesCount: discoveryFeed.candidates.length,
         topCandidate: discoveryFeed.candidates[0]?.profile.name,
         relevanceExplanation: discoveryFeed.candidates[0]?.explanation,
-        esQuerySpec: discoveryFeed.esQuerySpec
+        esQuerySpec: discoveryFeed.esQuerySpec,
+        tookMs: discoveryFeed.tookMs
       }
     );
     if (onStep) onStep(step3Result);
@@ -77,7 +112,7 @@ export class ScenarioRunner {
 
     const step4Result = this.log(
       4,
-      "Mutual Match Established",
+      "Mutual Match Established via Swipe Interface",
       {
         initiator: "Alex Chen",
         partner: "Maya Lin",
@@ -88,38 +123,50 @@ export class ScenarioRunner {
     if (onStep) onStep(step4Result);
 
     // Step 5: Mutual Matches Inform Composition of a Pod (Pod 07)
+    // Seed members Alex & Maya match; Elasticsearch hybrid search ranks complementary members to complete Pod of 5!
     const pod = await this.app.podCtrl.composePod({
-      seedAttendeeIds: ["att_alex_chen", "att_maya_lin", "att_jordan_taylor", "att_elena_rostova", "att_marcus_vance"],
+      seedAttendeeIds: ["att_alex_chen", "att_maya_lin"],
       theme: "Autonomous Cloud & Systems",
       targetSize: 5
     });
 
     const step5Result = this.log(
       5,
-      "Pod 07 Formed & Communication Space Created",
+      "Pod 07 Formed via Elasticsearch Hybrid Ranking",
       {
         podId: pod.id,
         podName: pod.name,
         memberCount: pod.memberIds.length,
-        topic: pod.topic
+        memberIds: pod.memberIds,
+        topic: pod.topic,
+        candidateRankings: pod.compositionMeta?.candidateRankings || []
       }
     );
     if (onStep) onStep(step5Result);
 
-    // Step 6: AI Facilitator Welcomes the Group & Explains Shared Interests
-    const welcomeMsg = await this.app.facilitatorCtrl.welcomePod(pod.id);
+    // Step 6: Dedicated Pod Communication Space Created
     const step6Result = this.log(
       6,
-      "AI Facilitator Assigned & Group Onboarding",
+      "Dedicated Pod Communication Space Created",
       {
-        sender: welcomeMsg?.senderName,
-        welcomeMessage: welcomeMsg?.content,
-        pinned: welcomeMsg?.pinned
+        podId: pod.id,
+        podName: pod.name,
+        channel: "#pod-07-autonomous-cloud",
+        status: "ACTIVE",
+        facilitatorName: pod.facilitatorName,
+        capabilities: [
+          "Persistent Group Chat",
+          "AI Facilitator Onboarding",
+          "Real-Time SSE Event Stream",
+          "Pinned Meetup Noticeboard"
+        ]
       }
     );
     if (onStep) onStep(step6Result);
 
-    // Step 7: Members Introduce Themselves & Discuss In Pod Chat
+    // Step 7: AI Facilitator Welcomes the Group & Introductions Begin
+    const welcomeMsg = await this.app.facilitatorCtrl.welcomePod(pod.id);
+
     const msgAlex = await this.app.commCtrl.sendMessage({
       podId: pod.id,
       senderId: "att_alex_chen",
@@ -134,8 +181,11 @@ export class ScenarioRunner {
 
     const step7Result = this.log(
       7,
-      "Active Pod Collaboration & Introductions",
+      "AI Facilitator Welcomes Group & Introductions Begin",
       {
+        facilitatorName: welcomeMsg?.senderName,
+        welcomeMessage: welcomeMsg?.content,
+        pinned: welcomeMsg?.pinned,
         dialogue: [
           { from: msgAlex.senderName, text: msgAlex.content },
           { from: msgMaya.senderName, text: msgMaya.content }
@@ -144,23 +194,38 @@ export class ScenarioRunner {
     );
     if (onStep) onStep(step7Result);
 
-    // Step 8: Members Coordinate a Physical Lunch Meetup
+    // Step 8: Members Coordinate Physical Lunch Meetup in Pod Channel
     const msgMarcus = await this.app.commCtrl.sendMessage({
       podId: pod.id,
       senderId: "att_marcus_vance",
       content: "Should we grab lunch together at the Main Hall East Patio at 12:15 to compare architectures?"
     });
 
+    const step8Result = this.log(
+      8,
+      "Pod Members Coordinate Physical Lunch Meetup",
+      {
+        sender: msgMarcus.senderName,
+        proposalMessage: msgMarcus.content,
+        proposedLocation: "Main Hall East Patio",
+        proposedTime: "12:15 PM"
+      }
+    );
+    if (onStep) onStep(step8Result);
+
     // Step 9: Facilitator Confirms Location and Pins Meetup
     const updatedPod = await this.app.podCtrl.getPod(pod.id);
+    const podMessages = await this.app.commCtrl.getMessages(pod.id);
+    const facConfirmMsg = podMessages.find((m) => m.senderType === "facilitator" && m.metadata?.meetupConfirmed);
+
     const step9Result = this.log(
       9,
-      "Facilitator Confirms & Pins Physical Meetup",
+      "AI Facilitator Confirms & Pins Physical Meetup",
       {
-        proposedBy: msgMarcus.senderName,
         pinnedLocation: updatedPod?.pinnedMeetup?.location,
         meetupTime: updatedPod?.pinnedMeetup?.time,
-        status: updatedPod?.pinnedMeetup?.confirmed ? "CONFIRMED" : "PENDING"
+        status: updatedPod?.pinnedMeetup?.confirmed ? "CONFIRMED" : "PENDING",
+        facilitatorConfirmation: facConfirmMsg?.content || `Meetup confirmed at ${updatedPod?.pinnedMeetup?.location} at ${updatedPod?.pinnedMeetup?.time}.`
       }
     );
     if (onStep) onStep(step9Result);

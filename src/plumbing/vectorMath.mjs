@@ -90,3 +90,4 @@ export function vectorCentroid(vectors) {
   }
   return normalizeVector(centroid);
 }
+

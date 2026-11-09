@@ -21,6 +21,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     this.nodeUrl = options.nodeUrl || process.env.ELASTICSEARCH_URL || "http://localhost:9200";
     this.indexName = options.indexName || "cinder_attendees";
     this.isLiveCluster = false;
+    this.clusterInfo = null;
 
     // In-memory index documents store
     this.docs = new Map();
@@ -30,29 +31,87 @@ export class ElasticsearchClient extends IElasticsearchClient {
   }
 
   /**
-   * Ensures the index and mappings exist.
+   * Fast health check probe for Elasticsearch cluster with bounded timeout.
+   * @param {number} [timeoutMs=250]
    */
-  async ensureIndex() {
+  async checkHealth(timeoutMs = 250) {
+    const start = performance.now();
     try {
       const res = await fetch(`${this.nodeUrl}/_cluster/health`, {
-        signal: AbortSignal.timeout(600)
+        signal: AbortSignal.timeout(timeoutMs)
       });
+      const latencyMs = Number((performance.now() - start).toFixed(2));
       if (res.ok) {
+        const data = await res.json();
         this.isLiveCluster = true;
+        this.clusterInfo = data;
+        return {
+          live: true,
+          status: data.status || "green",
+          clusterName: data.cluster_name || "elasticsearch",
+          mode: "live-elasticsearch-cluster",
+          latencyMs
+        };
       }
     } catch {
-      this.isLiveCluster = false;
+      // Cluster offline or unreachable - seamless embedded fallback
+    }
+
+    this.isLiveCluster = false;
+    return {
+      live: false,
+      status: "green",
+      clusterName: "cinder-es-cluster",
+      mode: "embedded-es-engine",
+      latencyMs: Number((performance.now() - start).toFixed(2))
+    };
+  }
+
+  /**
+   * Ensures the index and mappings exist in live cluster or embedded engine.
+   */
+  async ensureIndex() {
+    const health = await this.checkHealth(250);
+
+    if (this.isLiveCluster) {
+      try {
+        const checkRes = await fetch(`${this.nodeUrl}/${this.indexName}`, {
+          method: "HEAD",
+          signal: AbortSignal.timeout(250)
+        });
+        if (checkRes.status === 404) {
+          await fetch(`${this.nodeUrl}/${this.indexName}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mappings: {
+                properties: {
+                  embedding: { type: "dense_vector", dims: 32, index: true, similarity: "cosine" },
+                  interests: { type: "text" },
+                  expertise: { type: "text" },
+                  projects: { type: "text" },
+                  challenges: { type: "text" }
+                }
+              }
+            }),
+            signal: AbortSignal.timeout(350)
+          });
+        }
+      } catch {
+        // Embedded engine is fully operational
+      }
     }
 
     return {
       acknowledged: true,
       index: this.indexName,
-      mode: this.isLiveCluster ? "live-elasticsearch-cluster" : "in-process-es-engine"
+      mode: this.isLiveCluster ? "live-elasticsearch-cluster" : "in-process-es-engine",
+      clusterStatus: health.status
     };
   }
 
   /**
-   * Indexes an attendee.
+   * Indexes an attendee in embedded engine and synchronizes to live cluster if active.
    * @param {any} attendee
    */
   async indexAttendee(attendee) {
@@ -80,6 +139,19 @@ export class ElasticsearchClient extends IElasticsearchClient {
       tokenLength: tokens.length,
       embedding: attendee.embedding || []
     });
+
+    if (this.isLiveCluster) {
+      try {
+        await fetch(`${this.nodeUrl}/${this.indexName}/_doc/${attendee.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(rawDoc),
+          signal: AbortSignal.timeout(300)
+        });
+      } catch {
+        // Embedded fallback guarantees continuous operation
+      }
+    }
 
     return {
       result: "created",
@@ -189,14 +261,16 @@ export class ElasticsearchClient extends IElasticsearchClient {
   }
 
   /**
-   * Returns current cluster status.
+   * Returns current cluster status and engine configuration.
    */
   async getStatus() {
     return {
-      status: "green",
-      clusterName: "cinder-es-cluster",
+      status: this.isLiveCluster ? (this.clusterInfo?.status || "green") : "green",
+      clusterName: this.isLiveCluster ? (this.clusterInfo?.cluster_name || "cinder-live-es") : "cinder-es-cluster",
       docCount: this.docs.size,
-      mode: this.isLiveCluster ? "live-cluster" : "embedded-es-engine"
+      mode: this.isLiveCluster ? "live-cluster" : "embedded-es-engine",
+      nodeUrl: this.nodeUrl,
+      indexName: this.indexName
     };
   }
 }

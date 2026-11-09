@@ -104,3 +104,4 @@ describe("Domain Entities", () => {
     assert.strictEqual(explanation.scorePercent, 88);
   });
 });
+

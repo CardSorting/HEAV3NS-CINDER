@@ -145,3 +145,4 @@ export const DISCUSSION_PROMPTS = Object.freeze([
   "How can eBPF telemetry bridge the gap between kernel signals and higher-level AI agent decisions?",
   "What is the single most common failure mode when automating incident remediation, and how do you safeguard against it?"
 ]);
+

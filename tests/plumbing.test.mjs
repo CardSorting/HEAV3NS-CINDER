@@ -100,3 +100,4 @@ describe("Semantic Text Embedder", () => {
     assert.ok(sim > 0.2);
   });
 });
+

@@ -176,8 +176,11 @@ export class CinderWebServer {
     }
 
     // 3. Static Assets Server
-    let filePath = path.join(PUBLIC_DIR, pathname === "/" ? "index.html" : pathname);
-    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    const cleanPath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, "");
+    const requestedFile = cleanPath === "/" || cleanPath === "" ? "index.html" : cleanPath.replace(/^\/+/, "");
+    let filePath = path.join(PUBLIC_DIR, requestedFile);
+
+    if (!filePath.startsWith(PUBLIC_DIR) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
       filePath = path.join(PUBLIC_DIR, "index.html");
     }
 
@@ -218,3 +221,4 @@ export class CinderWebServer {
     });
   }
 }
+
