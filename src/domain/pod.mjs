@@ -19,6 +19,7 @@ export class Pod {
    * @param {string[]} [props.pinnedAnnouncements=[]]
    * @param {string} [props.facilitatorName="CINDER Facilitator"]
    * @param {string} [props.createdAt]
+   * @param {string|null} [props.eventId=null] - Event (eventapp @id) the pod was formed at
    */
   constructor({
     id,
@@ -29,10 +30,14 @@ export class Pod {
     pinnedMeetup = null,
     pinnedAnnouncements = [],
     facilitatorName = "CINDER Facilitator (AI)",
-    createdAt = new Date().toISOString()
+    createdAt = new Date().toISOString(),
+    eventId = null
   }) {
     if (!id || !name || !topic) {
       throw new Error("Pod requires valid id, name, and topic");
+    }
+    if (eventId !== null && (typeof eventId !== "string" || eventId.trim() === "")) {
+      throw new Error("Pod eventId must be a non-empty string or null");
     }
 
     this.id = id;
@@ -44,6 +49,7 @@ export class Pod {
     this.pinnedAnnouncements = [...pinnedAnnouncements];
     this.facilitatorName = facilitatorName;
     this.createdAt = createdAt;
+    this.eventId = eventId;
   }
 
   /**
@@ -63,6 +69,13 @@ export class Pod {
   addMessage(message) {
     if (!(message instanceof Message)) {
       throw new Error("addMessage must be called with a Message entity");
+    }
+    if (this.eventId) {
+      if (message.eventId === null) {
+        message.eventId = this.eventId;
+      } else if (message.eventId !== this.eventId) {
+        throw new Error(`Message ${message.id} belongs to event ${message.eventId}, not this pod's event ${this.eventId}`);
+      }
     }
     this.messages.push(message);
     if (message.pinned) {
@@ -94,7 +107,8 @@ export class Pod {
       pinnedMeetup: this.pinnedMeetup,
       pinnedAnnouncements: this.pinnedAnnouncements,
       facilitatorName: this.facilitatorName,
-      createdAt: this.createdAt
+      createdAt: this.createdAt,
+      eventId: this.eventId
     };
   }
 }

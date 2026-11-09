@@ -14,6 +14,7 @@ export class Match {
    * @param {boolean} [props.mutual=false]
    * @param {string} [props.explanation=""]
    * @param {string} [props.createdAt]
+   * @param {string|null} [props.eventId=null] - Event both attendees are registered for
    */
   constructor({
     id,
@@ -22,10 +23,14 @@ export class Match {
     action,
     mutual = false,
     explanation = "",
-    createdAt = new Date().toISOString()
+    createdAt = new Date().toISOString(),
+    eventId = null
   }) {
     if (!id || !initiatorId || !targetId || !action) {
       throw new Error("Match requires id, initiatorId, targetId, and action");
+    }
+    if (eventId !== null && (typeof eventId !== "string" || eventId.trim() === "")) {
+      throw new Error("Match eventId must be a non-empty string or null");
     }
 
     this.id = id;
@@ -35,6 +40,7 @@ export class Match {
     this.mutual = Boolean(mutual);
     this.explanation = explanation;
     this.createdAt = createdAt;
+    this.eventId = eventId;
   }
 
   toJSON() {
@@ -45,7 +51,8 @@ export class Match {
       action: this.action,
       mutual: this.mutual,
       explanation: this.explanation,
-      createdAt: this.createdAt
+      createdAt: this.createdAt,
+      eventId: this.eventId
     };
   }
 }

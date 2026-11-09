@@ -118,3 +118,46 @@ describe("IElasticsearchClient contract", () => {
     });
   }
 });
+
+describe("Event scoping on domain entities", () => {
+  const EV = "urn:ue:event:devsummit-2026";
+  const base = {
+    attendee: { id: "att_1", name: "Alex" },
+    pod: { id: "pod_1", name: "Pod 01", topic: "Infra" },
+    match: { id: "m_1", initiatorId: "a", targetId: "b", action: "like" },
+    message: { id: "msg_1", podId: "pod_1", senderId: "a", senderName: "A", content: "hi" }
+  };
+  const ctors = { attendee: Attendee, pod: Pod, match: Match, message: Message };
+
+  for (const [name, Ctor] of Object.entries(ctors)) {
+    it(`${name}: eventId defaults to null and round-trips through toJSON`, () => {
+      assert.strictEqual(new Ctor(base[name]).eventId, null);
+      assert.strictEqual(new Ctor(base[name]).toJSON().eventId, null);
+      const scoped = new Ctor({ ...base[name], eventId: EV });
+      assert.strictEqual(scoped.toJSON().eventId, EV);
+      assert.strictEqual(new Ctor(scoped.toJSON()).eventId, EV);
+    });
+
+    it(`${name}: rejects an empty or non-string eventId`, () => {
+      assert.throws(() => new Ctor({ ...base[name], eventId: "" }), /eventId must be a non-empty string or null/);
+      assert.throws(() => new Ctor({ ...base[name], eventId: 42 }), /eventId must be a non-empty string or null/);
+    });
+  }
+
+  it("pod stamps its eventId onto messages and rejects messages from another event", () => {
+    const pod = new Pod({ ...base.pod, eventId: EV });
+    const msg = new Message(base.message);
+    pod.addMessage(msg);
+    assert.strictEqual(msg.eventId, EV);
+    assert.strictEqual(pod.toJSON().messages[0].eventId, EV);
+    const foreign = new Message({ ...base.message, id: "msg_2", eventId: "urn:ue:event:other" });
+    assert.throws(() => pod.addMessage(foreign), /belongs to event urn:ue:event:other/);
+  });
+
+  it("pod without an eventId leaves messages unscoped", () => {
+    const pod = new Pod(base.pod);
+    const msg = new Message(base.message);
+    pod.addMessage(msg);
+    assert.strictEqual(msg.eventId, null);
+  });
+});
