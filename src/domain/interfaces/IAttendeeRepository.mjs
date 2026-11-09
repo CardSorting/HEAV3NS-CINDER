@@ -24,10 +24,11 @@ export class IAttendeeRepository {
   }
 
   /**
-   * Lists all attendees.
+   * Lists attendees, optionally only those registered for one event.
+   * @param {string} [_eventId] - eventapp @id; all attendees when omitted
    * @returns {Promise<import("../attendee.mjs").Attendee[]>}
    */
-  async listAll() {
+  async listAll(_eventId) {
     throw new Error("IAttendeeRepository.listAll must be implemented by an infrastructure adapter.");
   }
 }

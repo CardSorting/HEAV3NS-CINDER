@@ -12,6 +12,13 @@ import { explainMatchRelevance } from "../src/domain/relevanceScore.mjs";
 import { ConferenceEvent, SELECTABLE_CATEGORIES } from "../src/domain/conferenceEvent.mjs";
 import { VenueSpace, findMentionedSpace } from "../src/domain/venueSpace.mjs";
 import { Announcement } from "../src/domain/announcement.mjs";
+import { IEventRepository } from "../src/domain/interfaces/IEventRepository.mjs";
+import { IAgendaRepository } from "../src/domain/interfaces/IAgendaRepository.mjs";
+import { ISpaceRepository } from "../src/domain/interfaces/ISpaceRepository.mjs";
+import { IAnnouncementRepository } from "../src/domain/interfaces/IAnnouncementRepository.mjs";
+import { IPromptRepository } from "../src/domain/interfaces/IPromptRepository.mjs";
+import { IInteractionRepository } from "../src/domain/interfaces/IInteractionRepository.mjs";
+import { IMessageRepository } from "../src/domain/interfaces/IMessageRepository.mjs";
 import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
 
 describe("Domain Entities", () => {
@@ -292,4 +299,25 @@ describe("Announcement entity", () => {
     assert.throws(() => new Announcement({ ...props, publishAt: "soon" }), /publishAt/);
     assert.throws(() => new Announcement({ ...props, eventId: "" }), /eventId/);
   });
+});
+
+describe("Repository contracts for event-scoped data", () => {
+  const contracts = {
+    IEventRepository: [IEventRepository, ["listSelectable", "findById"]],
+    IAgendaRepository: [IAgendaRepository, ["listByEvent", "findById", "findNextSocialSlot", "findRelevant"]],
+    ISpaceRepository: [ISpaceRepository, ["listForEvent", "findById"]],
+    IAnnouncementRepository: [IAnnouncementRepository, ["listByEvent", "listAffecting"]],
+    IPromptRepository: [IPromptRepository, ["findForVector", "listByPhase"]],
+    IInteractionRepository: [IInteractionRepository, ["saveSwipe", "findSwipe", "listSwipedIds", "listMutualMatches", "findMatchById", "deleteSwipes"]],
+    IMessageRepository: [IMessageRepository, ["appendPodMessage", "listPodMessages", "appendDirectMessage", "listDirectMessages"]]
+  };
+  for (const [name, [Ctor, methods]] of Object.entries(contracts)) {
+    it(`${name} declares ${methods.length} methods that reject until implemented`, async () => {
+      const contract = new Ctor();
+      for (const m of methods) {
+        assert.strictEqual(typeof contract[m], "function", `${name}.${m}`);
+        await assert.rejects(() => contract[m](), new RegExp(`${name}\\.${m} must be implemented`));
+      }
+    });
+  }
 });
