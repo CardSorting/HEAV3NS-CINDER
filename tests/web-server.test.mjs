@@ -223,5 +223,30 @@ describe("CinderWebServer HTTP & API Routes", () => {
       assert.strictEqual(empty.status, 400);
       assert.strictEqual(server.directMessages, undefined, "web layer keeps no message state");
     });
+
+    it("handles meetups and RSVPs in the controller: members only, no assumed RSVPs", async () => {
+      const post = (path, body) => fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const pod = await (await post("/api/pods/compose", { seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], theme: "Meetup Test", targetSize: 3 })).json();
+      const outsiderId = (await (await post("/api/check-in", { name: "Not In Pod", title: "PM" })).json()).id;
+
+      const early = await post(`/api/pods/${pod.id}/rsvp`, { attendeeId: "att_maya_lin" });
+      assert.strictEqual(early.status, 409);
+      assert.strictEqual((await early.json()).code, "NO_MEETUP");
+
+      const pinned = await (await post(`/api/pods/${pod.id}/meetup`, { senderId: "att_alex_chen", location: "Tech Cafe (Booth 4)", time: "12:15 PM" })).json();
+      assert.strictEqual(pinned.location, "Tech Cafe (Booth 4)");
+      assert.deepStrictEqual(pinned.rsvps, ["att_alex_chen"], "only the proposer is RSVP'd");
+
+      assert.deepStrictEqual((await (await post(`/api/pods/${pod.id}/rsvp`, { attendeeId: "att_maya_lin" })).json()).rsvps, ["att_alex_chen", "att_maya_lin"]);
+      assert.deepStrictEqual((await (await post(`/api/pods/${pod.id}/rsvp`, { attendeeId: "att_maya_lin", attending: false })).json()).rsvps, ["att_alex_chen"]);
+
+      for (const [path, body] of [[`/api/pods/${pod.id}/meetup`, { senderId: outsiderId }], [`/api/pods/${pod.id}/rsvp`, { attendeeId: outsiderId }]]) {
+        const res = await post(path, body);
+        assert.strictEqual(res.status, 403, path);
+        assert.strictEqual((await res.json()).code, "NOT_A_POD_MEMBER");
+      }
+      const stored = (await (await fetch(`${baseUrl}/api/pods`)).json()).find((p) => p.id === pod.id);
+      assert.deepStrictEqual(stored.pinnedMeetup.rsvps, ["att_alex_chen"]);
+    });
   });
 });

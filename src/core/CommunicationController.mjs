@@ -120,6 +120,57 @@ export class CommunicationController {
   }
 
   /**
+   * Proposes a meetup in a Pod: posts the proposal to the chat, pins the location and time, and RSVPs
+   * the proposer. Other members RSVP for themselves (no RSVPs are assumed on their behalf).
+   * @param {Object} params
+   * @param {string} params.podId
+   * @param {string} params.senderId - must be a member of the Pod
+   * @param {string} [params.location="Main Hall East Patio"]
+   * @param {string} [params.time="12:15 PM"]
+   * @param {string} [params.note] - custom proposal text
+   * @returns {Promise<{ location: string, time: string, confirmed: boolean, rsvps: string[] }>}
+   */
+  async proposeMeetup({ podId, senderId, location = "Main Hall East Patio", time = "12:15 PM", note }) {
+    await this.requireMember(podId, senderId);
+    await this.sendMessage({ podId, senderId, content: note || `Let's meet at ${location} at ${time} to collaborate!` });
+    const pod = await this.podRepo.findById(podId);
+    pod.pinMeetup(location, time, true);
+    pod.pinnedMeetup.rsvps = [senderId];
+    await this.podRepo.save(pod);
+    this.eventBus.publish("meetup.pinned", { podId, location, time, rsvps: pod.pinnedMeetup.rsvps, eventId: pod.eventId });
+    return pod.pinnedMeetup;
+  }
+
+  /**
+   * Records a Pod member's RSVP to the pinned meetup.
+   * @param {Object} params
+   * @param {string} params.podId
+   * @param {string} params.attendeeId - must be a member of the Pod
+   * @param {boolean} [params.attending=true]
+   * @returns {Promise<{ location: string, time: string, confirmed: boolean, rsvps: string[] }>}
+   */
+  async rsvpMeetup({ podId, attendeeId, attending = true }) {
+    const pod = await this.requireMember(podId, attendeeId);
+    if (!pod.pinnedMeetup) throw requestError("NO_MEETUP", 409, `Pod ${podId} has no pinned meetup to RSVP to`);
+    const rsvps = new Set(pod.pinnedMeetup.rsvps || []);
+    if (attending === false) rsvps.delete(attendeeId); else rsvps.add(attendeeId);
+    pod.pinnedMeetup.rsvps = [...rsvps];
+    await this.podRepo.save(pod);
+    this.eventBus.publish("meetup.rsvp", { podId, pinnedMeetup: pod.pinnedMeetup, eventId: pod.eventId });
+    return pod.pinnedMeetup;
+  }
+
+  /** Loads a Pod and checks the attendee belongs to it (404 / 403 request errors otherwise). */
+  async requireMember(podId, attendeeId) {
+    const pod = await this.podRepo.findById(podId);
+    if (!pod) throw requestError("POD_NOT_FOUND", 404, `Pod ${podId} not found`);
+    if (!attendeeId || !pod.memberIds.includes(attendeeId)) {
+      throw requestError("NOT_A_POD_MEMBER", 403, `Attendee ${attendeeId} is not a member of ${podId}`);
+    }
+    return pod;
+  }
+
+  /**
    * Sends a 1:1 message between the two attendees of a mutual match.
    * @param {Object} params
    * @param {string} params.matchId

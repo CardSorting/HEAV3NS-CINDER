@@ -36,7 +36,7 @@ export class CinderWebServer {
     await this.app.initialize();
 
     // Hook domain events to SSE clients, delivered only to clients watching the same event
-    for (const type of ["attendee.checked_in", "match.mutual", "match.message", "pod.formed", "message.sent", "meetup.pinned", "facilitator.announcement"]) {
+    for (const type of ["attendee.checked_in", "match.mutual", "match.message", "pod.formed", "message.sent", "meetup.pinned", "meetup.rsvp", "facilitator.announcement"]) {
       this.app.eventBus.subscribe(type, (payload) => {
         this.eventIdOf(payload)
           .then((eventId) => this.broadcastSSE(type, payload, eventId))
@@ -321,28 +321,14 @@ export class CinderWebServer {
       const body = await this.readJsonBody(req);
       const event = await this.eventFor(body.eventId);
       await this.podIn(event, podId);
-      const location = body.location || "Main Hall East Patio";
-      const time = body.time || "12:15 PM";
-      const senderId = body.senderId || "att_alex_chen";
-      const proposalText = body.note || `Let's meet at ${location} at ${time} to collaborate!`;
-      await this.app.commCtrl.sendMessage({
+      const pinned = await this.app.commCtrl.proposeMeetup({
         podId,
-        senderId,
-        content: proposalText
+        senderId: body.senderId || "att_alex_chen",
+        location: body.location || undefined,
+        time: body.time || undefined,
+        note: body.note
       });
-      const pod = await this.app.podCtrl.getPod(podId);
-      if (pod) {
-        pod.pinMeetup(location, time, true);
-        pod.pinnedMeetup.rsvps = Array.from(new Set([...(pod.memberIds.slice(0, 3)), senderId]));
-        await this.app.podRepo.save(pod);
-        this.broadcastSSE("meetup.pinned", {
-          podId,
-          location,
-          time,
-          rsvps: pod.pinnedMeetup.rsvps
-        }, event.id);
-      }
-      return this.sendJson(res, pod ? pod.pinnedMeetup : { location, time, confirmed: true });
+      return this.sendJson(res, pinned);
     }
 
     if (pathname.startsWith("/api/pods/") && pathname.endsWith("/rsvp") && method === "POST") {
@@ -350,25 +336,13 @@ export class CinderWebServer {
       const podId = parts[3];
       const body = await this.readJsonBody(req);
       const event = await this.eventFor(body.eventId);
-      const attendeeId = body.attendeeId || "att_alex_chen";
-      const pod = await this.podIn(event, podId);
-      if (!pod.pinnedMeetup) {
-        pod.pinMeetup("Main Hall East Patio", "12:15 PM", true);
-      }
-      const initialRsvps = pod.pinnedMeetup.rsvps || pod.memberIds.filter((id) => id !== attendeeId);
-      const rsvpSet = new Set(initialRsvps);
-      if (body.attending === false) {
-        rsvpSet.delete(attendeeId);
-      } else {
-        rsvpSet.add(attendeeId);
-      }
-      pod.pinnedMeetup.rsvps = Array.from(rsvpSet);
-      await this.app.podRepo.save(pod);
-      this.broadcastSSE("meetup.rsvp", {
+      await this.podIn(event, podId);
+      const pinned = await this.app.commCtrl.rsvpMeetup({
         podId,
-        pinnedMeetup: pod.pinnedMeetup
-      }, event.id);
-      return this.sendJson(res, pod.pinnedMeetup);
+        attendeeId: body.attendeeId || "att_alex_chen",
+        attending: body.attending !== false
+      });
+      return this.sendJson(res, pinned);
     }
 
     if (pathname === "/api/scenario/run" && method === "POST") {
