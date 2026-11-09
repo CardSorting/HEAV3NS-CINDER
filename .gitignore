@@ -3,6 +3,7 @@ node_modules/
 .dietcode/
 .joy-state/
 *.log
+src/ui/web/react/dist/
 
 
 # Local secrets (Elasticsearch URL + API key) — never commit

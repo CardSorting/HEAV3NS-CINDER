@@ -5,7 +5,12 @@
   "type": "module",
   "main": "src/core/CinderApp.mjs",
   "scripts": {
-    "start": "node bin/server.mjs",
+    "start": "node bin/start-with-ui.mjs",
+    "start:api": "node bin/server.mjs",
+    "dev:ui": "vite --config src/ui/web/react/vite.config.ts",
+    "build:ui": "tsc -p src/ui/web/react/tsconfig.json --noEmit && vite build --config src/ui/web/react/vite.config.ts",
+    "preview:ui": "vite preview --config src/ui/web/react/vite.config.ts",
+    "test:ui": "node --test tests/react-ui.browser.mjs",
     "demo": "node bin/demo.mjs",
     "demo:journey": "node bin/record-live-journey.mjs",
     "deck": "python3 scripts/generate_cinder_90s_deck.py",
@@ -26,5 +31,17 @@
     "pods"
   ],
   "author": "Cinder Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "lucide-react": "^1.70.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "puppeteer-core": "^25.16.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.8"
+  }
 }
