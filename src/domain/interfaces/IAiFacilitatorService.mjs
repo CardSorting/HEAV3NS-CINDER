@@ -22,6 +22,8 @@ export class IAiFacilitatorService {
    * @param {string} _text
    * @param {Object} [_context]
    * @param {import("../venueSpace.mjs").VenueSpace[]} [_context.spaces] - meetup spaces available at the Pod's event
+   * @param {{ time: string, startsAt: string, minutesUntil?: number, slotTitle?: string }} [_context.when]
+   *   meetup time resolved against the agenda (used in the confirmation)
    * @returns {Promise<{ isMeetupProposal: boolean, location?: string, spaceId?: string|null, time?: string, confirmationMessage?: string }>}
    */
   async evaluateMeetupIntent(_pod, _text, _context) {

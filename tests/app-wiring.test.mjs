@@ -179,4 +179,20 @@ describe("CinderApp composition root", () => {
     await app.commCtrl.sendMessage({ podId: pod.id, senderId: "att_alex_chen", content: "Great talk this morning!" });
     assert.strictEqual((await app.podRepo.findById(pod.id)).messages.length, before + 1, "no meetup confirmation for small talk");
   });
+
+  it("pins meetups at the next lunch/break slot with an absolute start time", async () => {
+    const app = new CinderApp({ clock });   // demo clock frozen at 11:45 local on the seed event day
+    await app.initialize();
+    const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 4 });
+    await app.commCtrl.sendMessage({ podId: pod.id, senderId: "att_alex_chen", content: "lunch on the patio?" });
+    let after = await app.podRepo.findById(pod.id);
+    assert.strictEqual(after.pinnedMeetup.startsAt, "2026-12-23T12:15:00-07:00");
+    assert.strictEqual(after.pinnedMeetup.time, "12:15 PM");
+    const confirmation = after.messages.at(-1);
+    assert.match(confirmation.content, /Main Hall East Patio at 12:15 PM .*It starts in 30 minutes\./s);
+    await app.commCtrl.sendMessage({ podId: pod.id, senderId: "att_maya_lin", content: "or meet at the tech cafe at 12:50?" });
+    after = await app.podRepo.findById(pod.id);
+    assert.strictEqual(after.pinnedMeetup.startsAt, "2026-12-23T12:50:00-07:00");
+    assert.strictEqual(after.pinnedMeetup.location, "Tech Cafe (Booth 4)");
+  });
 });

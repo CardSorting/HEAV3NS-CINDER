@@ -4,6 +4,7 @@ import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
 import { CinderApp } from "../src/core/CinderApp.mjs";
+import { createClock } from "../src/plumbing/clock.mjs";
 
 describe("CINDER Matching and Pod Orchestration", () => {
   let app;
@@ -64,6 +65,9 @@ describe("CINDER Matching and Pod Orchestration", () => {
   });
 
   it("coordinates messages and detects physical meetup intent", async () => {
+    // The facilitator times meetups against the agenda, so run on the event day (demo clock 11:45 local).
+    app = new CinderApp({ clock: createClock({ demoTime: "2026-12-23T11:45:00-07:00", frozen: true }) });
+    await app.initialize();
     const pod = await app.podCtrl.composePod({
       seedAttendeeIds: ["att_alex_chen", "att_maya_lin"],
       targetSize: 2

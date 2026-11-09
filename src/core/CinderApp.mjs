@@ -166,6 +166,8 @@ export class CinderApp {
       messageRepo: this.messageRepo,
       interactionRepo: this.interactionRepo,
       spaceRepo: this.spaceRepo,
+      agendaRepo: this.agendaRepo,
+      clock: this.clock,
       defaultEventId: this.defaultEventId
     });
 

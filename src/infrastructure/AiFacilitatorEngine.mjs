@@ -47,7 +47,7 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
    * @param {import("../domain/pod.mjs").Pod} _pod
    * @param {string} text
    */
-  async evaluateMeetupIntent(_pod, text, { spaces = [] } = {}) {
+  async evaluateMeetupIntent(_pod, text, { spaces = [], when = null } = {}) {
     const lower = text.toLowerCase();
 
     // The most specific space the message names, matched on the space's name and aliases
@@ -71,10 +71,14 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
 
     const detectedLocation = mentioned ? mentioned.name : "Main Hall East Patio";
 
-    const time = "12:15 PM";
+    const time = when?.time || "12:15 PM";
+    const soon = Number.isFinite(when?.minutesUntil) && when.minutesUntil > 0 && when.minutesUntil <= 120
+      ? ` It starts in ${Math.round(when.minutesUntil)} minutes.`
+      : "";
+    const slot = when?.slotTitle ? ` (${when.slotTitle})` : "";
     const confirmationMessage =
-      `📍 Meetup Confirmed: ${detectedLocation} at ${time}.\n` +
-      `I've pinned this to your Pod header. See you there in 5 minutes!`;
+      `📍 Meetup Confirmed: ${detectedLocation} at ${time}${slot}.\n` +
+      `I've pinned this to your Pod header.${soon}`;
 
     return {
       isMeetupProposal: true,

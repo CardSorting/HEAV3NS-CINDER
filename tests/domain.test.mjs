@@ -20,6 +20,7 @@ import { IPromptRepository } from "../src/domain/interfaces/IPromptRepository.mj
 import { IInteractionRepository } from "../src/domain/interfaces/IInteractionRepository.mjs";
 import { IMessageRepository } from "../src/domain/interfaces/IMessageRepository.mjs";
 import { selectPodMembers, disciplineOf, derivePodTheme } from "../src/domain/podComposition.mjs";
+import { resolveMeetupTime, parseClockTime } from "../src/domain/meetupTime.mjs";
 import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
 
 describe("Domain Entities", () => {
@@ -400,6 +401,64 @@ describe("Pod theme from shared interests", () => {
   it("falls back to the most common single interest, then the fallback", () => {
     assert.strictEqual(derivePodTheme([{ interests: ["Go"] }, { interests: ["Rust"] }]), "Go");
     assert.strictEqual(derivePodTheme([], "Conference connections"), "Conference connections");
+  });
+});
+
+describe("Meetup time resolution", () => {
+  const tz = "America/Denver";
+  const s = (title, sessionType, start, end) => ({ title, sessionType, startDate: `2026-12-23T${start}:00-07:00`, endDate: `2026-12-23T${end}:00-07:00`, timezone: tz });
+  const sessions = [s("Keynote", "keynote", "09:15", "10:15"), s("Coffee Break", "break", "10:15", "10:30"),
+    s("Talk", "talk", "11:30", "12:15"), s("Lunch & Pod Meetups", "lunch", "12:15", "13:30"), s("Afternoon Break", "break", "15:15", "15:45")];
+  const at = (hhmm) => Date.parse(`2026-12-23T${hhmm}:00-07:00`);
+
+  it("uses the next social slot when the message names no time", () => {
+    const r = resolveMeetupTime({ text: "meet on the patio?", sessions, nowMs: at("11:45") });
+    assert.strictEqual(r.startsAt, "2026-12-23T12:15:00-07:00");
+    assert.strictEqual(r.time, "12:15 PM");
+    assert.strictEqual(r.slot.title, "Lunch & Pod Meetups");
+    assert.strictEqual(r.source, "agenda");
+  });
+
+  it("joins an ongoing social slot from now", () => {
+    const r = resolveMeetupTime({ text: "meet now", sessions, nowMs: at("12:40") });
+    assert.strictEqual(r.slot.title, "Lunch & Pod Meetups");
+    assert.strictEqual(Date.parse(r.startsAt), at("12:40"));
+  });
+
+  it("honours an explicit time on the event day and timezone", () => {
+    const r = resolveMeetupTime({ text: "patio at 12:40?", sessions, nowMs: at("11:45") });
+    assert.strictEqual(r.startsAt, "2026-12-23T12:40:00-07:00");
+    assert.strictEqual(r.time, "12:40 PM");
+    assert.strictEqual(r.slot.title, "Lunch & Pod Meetups", "falls inside lunch");
+    assert.strictEqual(r.source, "message");
+    assert.strictEqual(resolveMeetupTime({ text: "coffee at 3:20pm", sessions, nowMs: at("11:45") }).slot.title, "Afternoon Break");
+  });
+
+  it("moves 'tomorrow' and already-past times to the next event day", () => {
+    const day2 = [s("Breakfast", "break", "08:00", "09:00"), s("Coffee Break", "break", "10:15", "10:30")]
+      .map((x) => ({ ...x, startDate: x.startDate.replace("12-23", "12-24"), endDate: x.endDate.replace("12-23", "12-24") }));
+    const twoDays = [...sessions, ...day2];
+    assert.strictEqual(resolveMeetupTime({ text: "coffee at 10:20 tomorrow?", sessions: twoDays, nowMs: at("11:45") }).startsAt, "2026-12-24T10:20:00-07:00");
+    const past = resolveMeetupTime({ text: "coffee at 10:20?", sessions: twoDays, nowMs: at("11:45") });
+    assert.strictEqual(past.startsAt, "2026-12-24T10:20:00-07:00");
+    assert.strictEqual(past.slot.title, "Coffee Break");
+    assert.strictEqual(past.time, "Thu 10:20 AM", "another day this week shows the weekday");
+    const far = resolveMeetupTime({ text: "meet?", sessions, nowMs: Date.parse("2026-11-09T12:00:00-07:00") });
+    assert.strictEqual(far.time, "Dec 23, 10:15 AM", "weeks ahead shows the date");
+    assert.strictEqual(resolveMeetupTime({ text: "patio at 12:40", sessions: twoDays, nowMs: at("11:45") }).startsAt, "2026-12-23T12:40:00-07:00", "later today stays today");
+  });
+
+  it("returns null when the day's social slots are over and no time is named", () => {
+    assert.strictEqual(resolveMeetupTime({ text: "meet?", sessions, nowMs: at("16:00") }), null);
+  });
+
+  it("parses clock times but not room numbers", () => {
+    assert.deepStrictEqual(parseClockTime("at 12:30"), { hours: 12, minutes: 30 });
+    assert.deepStrictEqual(parseClockTime("1pm works"), { hours: 13, minutes: 0 });
+    assert.deepStrictEqual(parseClockTime("12:15 PM"), { hours: 12, minutes: 15 });
+    assert.deepStrictEqual(parseClockTime("at 2:30"), { hours: 14, minutes: 30 }, "conference hours: 2:30 is afternoon");
+    assert.strictEqual(parseClockTime("outside room 2.04"), null);
+    assert.strictEqual(parseClockTime("room 204"), null);
   });
 });
 
