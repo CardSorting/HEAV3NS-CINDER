@@ -209,4 +209,33 @@ describe("ElasticsearchClient live transport (mocked fetch)", () => {
     assert.strictEqual(JSON.parse(calls[0].body).input.length, 16);
     assert.strictEqual(JSON.parse(calls[0].body).input_type, "search");
   });
+
+  it("live hybridSearch excludes self and swiped attendees inside every retriever", async () => {
+    const { impl, calls } = mockFetch(() => ({ body: { took: 5, hits: { total: { value: 1 }, hits: [{ _id: "att_x", _score: 0.5, _source: { id: "att_x" } }] } } }));
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, discoveryIndex: "cinder-registrations" });
+    es.isLiveCluster = true;
+    const res = await es.hybridSearch({
+      queryText: "kubernetes", queryVector: Array(1024).fill(0.1), excludeIds: ["att_me", "att_passed", "att_liked"],
+      limit: 10, eventId: "urn:ue:event:e1", lookingForText: "backend engineers"
+    });
+    assert.strictEqual(calls[0].path, "/cinder-registrations/_search");
+    const inner = JSON.parse(calls[0].body).retriever.rrf.retrievers.map((r) => r.retriever);
+    assert.strictEqual(inner.length, 4);
+    for (const r of inner) {
+      const bool = r.standard ? r.standard.query.bool : r.knn.filter.bool;
+      assert.deepStrictEqual(bool.must_not, [{ ids: { values: ["att_me", "att_passed", "att_liked"] } }]);
+      assert.deepStrictEqual(bool.filter, [{ term: { eventId: "urn:ue:event:e1" } }]);
+    }
+    assert.strictEqual(res.engine, "elasticsearch");
+    assert.strictEqual(res.hits[0].id, "att_x");
+  });
+
+  it("hybridSearch stays on the embedded engine without an event or when the cluster is down", async () => {
+    const { impl, calls } = mockFetch(() => ({ body: {} }));
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, discoveryIndex: "cinder-registrations" });
+    await es.hybridSearch({ queryText: "x", queryVector: [], excludeIds: [], limit: 5, eventId: "e1" });
+    es.isLiveCluster = true;
+    await es.hybridSearch({ queryText: "x", queryVector: [], excludeIds: [], limit: 5 });
+    assert.strictEqual(calls.length, 0, "no cluster requests");
+  });
 });

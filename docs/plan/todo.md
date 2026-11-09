@@ -37,7 +37,7 @@
 [x] Replace the hybridSearch implementation in live mode with an Elasticsearch RRF retriever combining BM25 on profile fields, kNN on the stored profile vector, and kNN on looking_for text via query_vector_builder
 [x] Fetch stored vectors with _source exclude_vectors false wherever a stored embedding is reused as a kNN query
 [x] Weight the looking_for retriever above profile similarity so discovery surfaces complementary attendees rather than lookalikes
-[ ] Exclude the requesting attendee and previously swiped attendees from discovery with filters inside every retriever
+[x] Exclude the requesting attendee and previously swiped attendees from discovery with filters inside every retriever
 [ ] Return the executed Elasticsearch query and per-retriever ranks from discovery so the UI shows the real query specification
 [ ] Update explainMatchRelevance to describe complementary matches using looking_for, discipline and shared interests from registration data
 [ ] Evaluate discovery quality on the demo event with a fixed set of attendees and tune retriever weights and rank window size
