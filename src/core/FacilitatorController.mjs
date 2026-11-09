@@ -19,10 +19,12 @@ export class FacilitatorController {
    * @param {import("../domain/interfaces/IAgendaRepository.mjs").IAgendaRepository} params.agendaRepo
    * @param {import("../domain/interfaces/IPromptRepository.mjs").IPromptRepository} params.promptRepo
    * @param {import("../domain/interfaces/ISpaceRepository.mjs").ISpaceRepository} params.spaceRepo
+   * @param {import("../domain/interfaces/IAnnouncementRepository.mjs").IAnnouncementRepository} [params.announcementRepo]
    * @param {{ nowMs: () => number }} params.clock
    * @param {string|null} [params.defaultEventId=null] - event for Pods created without one
    */
-  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService, agendaRepo, promptRepo, spaceRepo, clock, defaultEventId = null }) {
+  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService, agendaRepo, promptRepo, spaceRepo, clock, defaultEventId = null, announcementRepo = null }) {
+    this.announcementRepo = announcementRepo;
     if (!agendaRepo || !promptRepo || !spaceRepo || !clock) {
       throw new Error("FacilitatorController requires agendaRepo, promptRepo, spaceRepo and clock");
     }
@@ -53,6 +55,62 @@ export class FacilitatorController {
       venues: spaces.map((s) => ({ id: s.id, name: s.name, tag: s.displayTag(), capacity: s.capacity })),
       prompts: prompts.map((p) => p.text)
     };
+  }
+
+  /**
+   * Posts published announcements (publishAt <= clock) to the Pods they concern, once per Pod:
+   * - conference-wide notices (general, logistics, reminder) go to every Pod of the event;
+   * - room and schedule changes go to Pods with a member who bookmarked or speaks at an affected session,
+   *   or whose pinned meetup is at an affected space.
+   * Important and critical announcements are pinned.
+   * @param {string} [eventId] - defaults to the default event
+   * @returns {Promise<{ eventId: string, published: number, delivered: Array<{ podId: string, announcementId: string }> }>}
+   */
+  async deliverAnnouncements(eventId = this.defaultEventId) {
+    if (!this.announcementRepo || !eventId) return { eventId, published: 0, delivered: [] };
+    const published = await this.announcementRepo.listByEvent(eventId, { publishedBeforeMs: this.clock.nowMs() });
+    const delivered = [];
+    if (!published.length) return { eventId, published: 0, delivered };
+
+    for (const pod of await this.podRepo.listAll(eventId)) {
+      const already = new Set(pod.messages.map((m) => m.metadata?.announcementId).filter(Boolean));
+      const pending = published.filter((a) => !already.has(a.id));
+      if (!pending.length) continue;
+
+      const refs = await this.podRefs(pod);
+      let changed = false;
+      for (const ann of pending) {
+        if (ann.isScheduleChange() && !ann.affectsAny(refs)) continue;
+        const icon = ann.severity === "critical" ? "🚨" : ann.isScheduleChange() ? "🔁" : "📣";
+        const message = new Message({
+          id: generatePrefixedId("msg_ann"),
+          podId: pod.id,
+          senderId: "facilitator_ai",
+          senderName: pod.facilitatorName,
+          senderType: "facilitator",
+          content: `${icon} ${ann.title}\n${ann.body}`,
+          pinned: ann.severity !== "info",
+          metadata: { type: "announcement", announcementId: ann.id, kind: ann.kind, severity: ann.severity, publishAt: ann.publishAt }
+        });
+        pod.addMessage(message);
+        changed = true;
+        delivered.push({ podId: pod.id, announcementId: ann.id });
+        this.eventBus.publish("facilitator.announcement", { podId: pod.id, message: message.toJSON() });
+      }
+      if (changed) await this.podRepo.save(pod);
+    }
+    return { eventId, published: published.length, delivered };
+  }
+
+  /** Sessions and spaces a Pod cares about: members' bookmarks and talks, and its pinned meetup place. */
+  async podRefs(pod) {
+    const sessionIds = new Set();
+    for (const id of pod.memberIds) {
+      const member = await this.attendeeRepo.findById(id);
+      for (const s of [...(member?.bookmarkedSessionIds || []), ...(member?.speakerSessionIds || [])]) sessionIds.add(s);
+    }
+    const spaceIds = pod.pinnedMeetup?.spaceId ? [pod.pinnedMeetup.spaceId] : [];
+    return { sessionIds: [...sessionIds], spaceIds };
   }
 
   /** The next break/lunch/networking slot by the clock, summarized for facilitator messages. */

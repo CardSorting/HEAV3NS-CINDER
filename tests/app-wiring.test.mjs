@@ -247,4 +247,34 @@ describe("CinderApp composition root", () => {
     const fallback = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
     assert.ok(fallback.metadata.promptId.startsWith("prm_seed_"), "falls back to the phase list");
   });
+
+  it("delivers published announcements once, to every pod or only to affected pods", async () => {
+    const app = new CinderApp({ clock });   // 11:45 local, seed event
+    await app.initialize();
+    const ev = app.defaultEventId;
+    const ann = (id, kind, severity, publishAt, affects = {}) => ({ id, eventId: ev, kind, severity, title: id, body: `${id} body`,
+      publishAt: `2026-12-23T${publishAt}:00-07:00`, affects });
+    app.announcementRepo.announcements.push(
+      ann("welcome", "general", "info", "08:00"),
+      ann("room-move", "room-change", "important", "11:30", { sessionIds: ["session_02"] }),
+      ann("other-room", "room-change", "important", "11:30", { sessionIds: ["session_99"] }),
+      ann("later", "reminder", "info", "13:00")
+    );
+    (await app.attendeeRepo.findById("att_maya_lin")).bookmarkedSessionIds = ["session_02"];
+    const podA = await app.podCtrl.composePod({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 2 });
+    const podB = await app.podCtrl.composePod({ seedAttendeeIds: ["att_jordan_taylor", "att_elena_rostova"], targetSize: 2 });
+
+    const first = await app.facilitatorCtrl.deliverAnnouncements();
+    assert.strictEqual(first.published, 3, "the 13:00 reminder is not published yet at 11:45");
+    const got = (podId) => first.delivered.filter((d) => d.podId === podId).map((d) => d.announcementId).sort();
+    assert.deepStrictEqual(got(podA.id), ["room-move", "welcome"], "Maya bookmarked the moved session");
+    assert.deepStrictEqual(got(podB.id), ["welcome"], "unaffected pods only get conference-wide notices");
+
+    const msgs = (await app.podRepo.findById(podA.id)).messages.filter((m) => m.metadata?.type === "announcement");
+    assert.strictEqual(msgs.find((m) => m.metadata.announcementId === "room-move").pinned, true, "important -> pinned");
+    assert.strictEqual(msgs.find((m) => m.metadata.announcementId === "welcome").pinned, false);
+
+    const again = await app.facilitatorCtrl.deliverAnnouncements();
+    assert.deepStrictEqual(again.delivered, [], "each pod gets each announcement once");
+  });
 });

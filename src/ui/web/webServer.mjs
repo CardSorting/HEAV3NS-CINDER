@@ -355,6 +355,12 @@ export class CinderWebServer {
       return this.sendJson(res, pinned);
     }
 
+    if (pathname === "/api/announcements/deliver" && method === "POST") {
+      const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
+      return this.sendJson(res, await this.app.facilitatorCtrl.deliverAnnouncements(event.id));
+    }
+
     if (pathname === "/api/scenario/run" && method === "POST") {
       const result = await this.scenarioRunner.runFullScenario();
       return this.sendJson(res, result);

@@ -23,6 +23,8 @@ export class Attendee {
    * @param {string} [props.checked_in_at]
    * @param {string|null} [props.eventId=null] - Event (eventapp @id) this registration belongs to
    * @param {string} [props.discipline=""] - professional discipline (e.g. "sre", "backend"), used for Pod diversity
+   * @param {string[]} [props.bookmarkedSessionIds=[]] - sessions the attendee plans to attend
+   * @param {string[]} [props.speakerSessionIds=[]] - sessions the attendee speaks at
    */
   constructor({
     id,
@@ -40,7 +42,9 @@ export class Attendee {
     embedding = [],
     checked_in_at = new Date().toISOString(),
     eventId = null,
-    discipline = ""
+    discipline = "",
+    bookmarkedSessionIds = [],
+    speakerSessionIds = []
   }) {
     if (!id || typeof id !== "string") {
       throw new Error("Attendee must have a valid string id");
@@ -68,6 +72,8 @@ export class Attendee {
     this.checked_in_at = checked_in_at;
     this.eventId = eventId;
     this.discipline = typeof discipline === "string" ? discipline : "";
+    this.bookmarkedSessionIds = Array.isArray(bookmarkedSessionIds) ? [...bookmarkedSessionIds] : [];
+    this.speakerSessionIds = Array.isArray(speakerSessionIds) ? [...speakerSessionIds] : [];
   }
 
   /**
@@ -110,7 +116,9 @@ export class Attendee {
       embedding: this.embedding,
       checked_in_at: this.checked_in_at,
       eventId: this.eventId,
-      discipline: this.discipline
+      discipline: this.discipline,
+      bookmarkedSessionIds: this.bookmarkedSessionIds,
+      speakerSessionIds: this.speakerSessionIds
     };
   }
 }
