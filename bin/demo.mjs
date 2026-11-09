@@ -17,7 +17,7 @@ async function main() {
       CliPresenter.renderStepHeader(step.step, step.title);
 
       if (step.step === 1) {
-        console.log(`Registered ${step.details.attendeeCount} diverse conference attendees:`);
+        console.log(`${step.details.eventName}: ${step.details.attendeeCount} registered attendees. The demo cast:`);
         step.details.attendees.forEach((a) => {
           CliPresenter.renderAttendeeCard(a);
         });

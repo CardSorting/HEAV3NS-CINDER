@@ -362,7 +362,9 @@ export class CinderWebServer {
     }
 
     if (pathname === "/api/scenario/run" && method === "POST") {
-      const result = await this.scenarioRunner.runFullScenario();
+      const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
+      const result = await this.scenarioRunner.runFullScenario({ eventId: event.id });
       return this.sendJson(res, result);
     }
 
