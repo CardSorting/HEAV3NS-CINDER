@@ -1,4 +1,4 @@
-/** [LAYER: INFRASTRUCTURE] */
+/** [LAYER: UI] */
 
 // Compatibility probe used by compat_check.py (not app code).
 //   node elasticsearch/cinder/dump_entities.mjs dump            -> runs CINDER's scenario, prints the entities it produces

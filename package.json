@@ -10,7 +10,7 @@
     "demo:journey": "node bin/record-live-journey.mjs",
     "deck": "python3 scripts/generate_cinder_90s_deck.py",
     "test": "node --test tests/*.test.mjs",
-    "check": "node /Users/bozoegg/Desktop/HEAV3NS-JOY/bin/joy-check.mjs .",
+    "check": "npx -y -p github:CardSorting/HEAV3NS-JOY#7112dca56704a3bff5f27b9ce8d22cf93d15ead9 joy-check .",
     "docs:check": "node bin/docs-check.mjs .",
     "verify": "npm test && npm run check && npm run docs:check"
   },
