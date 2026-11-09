@@ -112,7 +112,7 @@ export class CinderApp {
       this.agendaRepo = new ElasticsearchAgendaRepository({ esClient: es, index: idx.sessions, toEntity: ENTITY.session });
       this.spaceRepo = new ElasticsearchSpaceRepository({ esClient: es, index: idx.spaces, eventsIndex: idx.events, toEntity: ENTITY.space });
       this.announcementRepo = new ElasticsearchAnnouncementRepository({ esClient: es, index: idx.announcements, toEntity: ENTITY.announcement });
-      this.promptRepo = new ElasticsearchPromptRepository({ esClient: es, index: idx.prompts });
+      this.promptRepo = new ElasticsearchPromptRepository({ esClient: es, index: idx.prompts, embedModel: this.config.embedModel });
     } else {
       // Offline always runs against the bundled seed event, whatever the live default is.
       const defaultEventId = SEED_EVENT.id;

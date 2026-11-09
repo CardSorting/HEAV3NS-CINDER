@@ -225,4 +225,25 @@ describe("CinderApp composition root", () => {
     assert.strictEqual(lateAfter.pinnedMeetup.time, "time to be agreed");
     assert.match(lateAfter.messages.at(-1).content, /no more breaks on today's agenda/);
   });
+
+  it("picks discussion prompts by kNN to the pod centroid and does not repeat them", async () => {
+    const app = new CinderApp({ clock });
+    await app.initialize();
+    const near = { id: "p_near", text: "Near prompt", phase: "deep-dive", topics: [] };
+    const far = { id: "p_far", text: "Far prompt", phase: "deep-dive", topics: [] };
+    const asked = [];
+    app.promptRepo.findForVector = async (vector, opts) => { asked.push({ dims: vector.length, ...opts }); return [near, far]; };
+    const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 3 });
+    assert.ok(Array.isArray(pod.centroid) && pod.centroid.length > 0);
+    const first = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
+    assert.match(first.content, /Near prompt/);
+    assert.strictEqual(first.metadata.promptId, "p_near");
+    assert.deepStrictEqual(asked[0], { dims: pod.centroid.length, phase: "deep-dive", limit: 10, text: pod.topic });
+    const second = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
+    assert.match(second.content, /Far prompt/, "a prompt the pod already had is skipped");
+
+    app.promptRepo.findForVector = async () => { throw new Error("vector search down"); };
+    const fallback = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
+    assert.ok(fallback.metadata.promptId.startsWith("prm_seed_"), "falls back to the phase list");
+  });
 });

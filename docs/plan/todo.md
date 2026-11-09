@@ -49,7 +49,7 @@
 [x] Resolve meetup locations in evaluateMeetupIntent by matching message text against cinder-spaces aliases for the event venue
 [x] Resolve meetup times against the next lunch, break or networking session from the agenda and store pinnedMeetup.startsAt
 [x] Replace the hard-coded 12:15 PM and Main Hall East Patio defaults in the facilitator and webServer with agenda and space lookups
-[ ] Select discussion prompts by kNN against the pod centroid filtered by phase
+[x] Select discussion prompts by kNN against the pod centroid filtered by phase
 [ ] Surface relevant upcoming talks for a pod by kNN against the pod centroid filtered by eventId, session type and the demo clock
 [ ] Deliver announcements to pods whose members are affected by the announced sessions or spaces when publishAt passes on the demo clock
 [ ] Add a facilitator scheduler that triggers welcome, agenda reminders, meetup reminders and prompts from the demo clock

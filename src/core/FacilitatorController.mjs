@@ -35,7 +35,6 @@ export class FacilitatorController {
     this.spaceRepo = spaceRepo;
     this.clock = clock;
     this.defaultEventId = defaultEventId;
-    this.promptIndex = 0;
   }
 
   /**
@@ -63,11 +62,26 @@ export class FacilitatorController {
     return slot ? slotSummary(slot.toJSON()) : null;
   }
 
-  /** Next discussion prompt (rotates through the deep-dive prompts). */
-  async nextPrompt() {
-    const prompts = await this.promptRepo.listByPhase("deep-dive");
-    if (!prompts.length) return undefined;
-    return prompts[this.promptIndex++ % prompts.length].text;
+  /**
+   * The discussion prompt for a Pod: kNN against the Pod centroid (its members' profile vectors) within a
+   * phase, skipping prompts this Pod has already had. Falls back to the phase list (in order) when the Pod
+   * has no centroid or the vector search fails.
+   * @param {import("../domain/pod.mjs").Pod} pod
+   * @param {"icebreaker"|"deep-dive"|"wrap-up"} [phase="deep-dive"]
+   * @returns {Promise<{ id: string, text: string, phase: string, topics: string[] } | null>}
+   */
+  async promptFor(pod, phase = "deep-dive") {
+    const used = new Set((pod.messages || []).map((m) => m.metadata?.promptId).filter(Boolean));
+    let candidates = [];
+    if (Array.isArray(pod.centroid) && pod.centroid.length) {
+      try {
+        candidates = await this.promptRepo.findForVector(pod.centroid, { phase, limit: 10, text: pod.topic });
+      } catch {
+        candidates = [];
+      }
+    }
+    if (!candidates.length) candidates = await this.promptRepo.listByPhase(phase);
+    return candidates.find((p) => !used.has(p.id)) || candidates[0] || null;
   }
 
   /**
@@ -139,7 +153,8 @@ export class FacilitatorController {
     const sessionEntity = await this.resolveAlertSession(pod.eventId || this.defaultEventId, sessionId);
     if (!sessionEntity) return null;
     const session = sessionEntity.toJSON();
-    const notif = await this.facilitatorService.generateAgendaNotification(pod, session, { prompt: await this.nextPrompt() });
+    const prompt = await this.promptFor(pod);
+    const notif = await this.facilitatorService.generateAgendaNotification(pod, session, { prompt: prompt?.text });
 
     const message = new Message({
       id: generatePrefixedId("msg_agenda"),
@@ -151,7 +166,8 @@ export class FacilitatorController {
       pinned: true,
       metadata: {
         type: "agenda_alert",
-        session
+        session,
+        promptId: prompt?.id || null
       }
     });
 
@@ -180,7 +196,8 @@ export class FacilitatorController {
       if (att) members.push(att);
     }
 
-    const promptText = await this.facilitatorService.generateDiscussionPrompt(pod, members, { prompt: await this.nextPrompt() });
+    const prompt = await this.promptFor(pod);
+    const promptText = await this.facilitatorService.generateDiscussionPrompt(pod, members, { prompt: prompt?.text });
 
     const message = new Message({
       id: generatePrefixedId("msg_prompt"),
@@ -190,7 +207,8 @@ export class FacilitatorController {
       senderType: "facilitator",
       content: promptText,
       metadata: {
-        type: "discussion_prompt"
+        type: "discussion_prompt",
+        promptId: prompt?.id || null
       }
     });
 

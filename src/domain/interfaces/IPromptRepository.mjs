@@ -11,6 +11,8 @@ export class IPromptRepository {
    * @param {Object} [_options]
    * @param {"icebreaker"|"deep-dive"|"wrap-up"} [_options.phase]
    * @param {number} [_options.limit=1]
+   * @param {string} [_options.text] - topic text (e.g. the Pod theme) fused with the vector; centroids of mixed
+   *   groups are generic and favour "hub" prompts, the theme keeps prompts on topic
    * @returns {Promise<Array<{ id: string, text: string, phase: string, topics: string[] }>>}
    */
   async findForVector(_vector, _options) {

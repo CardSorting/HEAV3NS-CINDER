@@ -332,3 +332,17 @@ describe("parseRetrieverRanks", () => {
   });
 });
 
+describe("ElasticsearchPromptRepository topic fusion", () => {
+  it("fuses the vector with the topic text (weights 1 / 2) when an embed model is set", async () => {
+    const es = fakeClient({ search: () => [{ id: "p", text: "Q?", phase: "deep-dive", topics: [] }] });
+    const repo = new ElasticsearchPromptRepository({ esClient: es, index: "cinder-prompts", embedModel: ".m" });
+    await repo.findForVector(vec(), { phase: "deep-dive", limit: 3, text: "Runbook Automation & SLOs" });
+    const rrf = es.of("search")[0].body.retriever.rrf;
+    assert.deepStrictEqual(rrf.retrievers.map((r) => r.weight), [1, 2]);
+    assert.strictEqual(rrf.retrievers[1].retriever.knn.query_vector_builder.text_embedding.model_text, "Discussion questions about Runbook Automation & SLOs");
+    assert.ok(rrf.retrievers.every((r) => r.retriever.knn.filter.term.phase === "deep-dive"));
+    await repo.findForVector(vec(), { phase: "deep-dive" });
+    assert.ok(es.of("search")[1].body.knn, "vector-only kNN without text");
+  });
+});
+
