@@ -7,6 +7,7 @@ import { dotProduct, magnitude, cosineSimilarity, normalizeVector, vectorCentroi
 import { tokenizeText, calculateTermFrequencies, computeBM25Score } from "../src/plumbing/bm25Scorer.mjs";
 import { reciprocalRankFusion } from "../src/plumbing/rrfRanker.mjs";
 import { generateDenseEmbedding } from "../src/plumbing/textEmbedder.mjs";
+import { parseDotenv, mergeEnv, resolveElasticConfig, loadElasticConfig, redactElasticConfig } from "../src/plumbing/elasticConfig.mjs";
 
 describe("Vector Math Plumbing", () => {
   it("calculates dotProduct and magnitude", () => {
@@ -101,3 +102,53 @@ describe("Semantic Text Embedder", () => {
   });
 });
 
+describe("Elasticsearch Config Plumbing", () => {
+  it("parses .env text: comments, export, quotes, inline comments and '=' in values", () => {
+    const env = parseDotenv([
+      "# comment",
+      "ES_URL=https://example.es.io:443/",
+      "export ES_API_KEY=abc==",
+      'QUOTED="hello # not a comment"',
+      "INLINE=value # trailing comment",
+      "bad line without equals",
+      "1BAD=nope"
+    ].join("\n"));
+    assert.strictEqual(env.ES_URL, "https://example.es.io:443/");
+    assert.strictEqual(env.ES_API_KEY, "abc==");
+    assert.strictEqual(env.QUOTED, "hello # not a comment");
+    assert.strictEqual(env.INLINE, "value");
+    assert.strictEqual(env["1BAD"], undefined);
+    assert.ok(Object.isFrozen(env));
+  });
+
+  it("lets the process environment override .env values, ignoring empty ones", () => {
+    const merged = mergeEnv({ ES_URL: "file", ES_API_KEY: "filekey" }, { ES_URL: "proc", ES_API_KEY: "" });
+    assert.strictEqual(merged.ES_URL, "proc");
+    assert.strictEqual(merged.ES_API_KEY, "filekey");
+  });
+
+  it("resolves defaults, trailing-slash URLs and legacy ELASTICSEARCH_URL", () => {
+    const cfg = resolveElasticConfig({ ELASTICSEARCH_URL: "http://localhost:9200/" });
+    assert.strictEqual(cfg.url, "http://localhost:9200");
+    assert.strictEqual(cfg.apiKey, null);
+    assert.strictEqual(cfg.configured, false);
+    assert.strictEqual(cfg.indices.events, "eventapp");
+    assert.strictEqual(cfg.indices.registrations, "cinder-registrations");
+    assert.strictEqual(cfg.indices.messages, "cinder-messages");
+    assert.strictEqual(cfg.embedModel, ".jina-embeddings-v5-text-small");
+  });
+
+  it("applies index prefix and per-index overrides", () => {
+    const cfg = loadElasticConfig("ES_URL=https://x\nES_API_KEY=k\nES_CINDER_PREFIX=test-", { ES_INDEX_PODS: "custom-pods", ES_INDEX: "events-v2" });
+    assert.strictEqual(cfg.configured, true);
+    assert.strictEqual(cfg.indices.events, "events-v2");
+    assert.strictEqual(cfg.indices.sessions, "test-sessions");
+    assert.strictEqual(cfg.indices.pods, "custom-pods");
+  });
+
+  it("redacts the API key for logging", () => {
+    const red = redactElasticConfig(resolveElasticConfig({ ES_URL: "https://x", ES_API_KEY: "SW9uTHdhRUI4" }));
+    assert.ok(!red.apiKey.includes("THdhRUI4"));
+    assert.strictEqual(red.url, "https://x");
+  });
+});
