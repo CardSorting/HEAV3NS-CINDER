@@ -230,7 +230,8 @@ SCENES = [
         "title": "Discovering Maya Lin: 89% Hybrid Resonance",
         "subtitle": "Zero-Friction Swipe Interface Backed by Reciprocal Rank Fusion & Transparent Rationale",
         "visual_type": "art",
-        "visual_file": "cinder-hero-02.jpg",
+        "visual_file": "screen-02-swipe-discovery.png",
+        "visual_type": "screen",
         "stats": [
             ("89% MATCH", "HYBRID AFFINITY"),
             ("BM25: 11.82", "KEYWORD ALIGNMENT"),
@@ -272,7 +273,8 @@ SCENES = [
         "title": "Pod 07: Autonomous Cloud & Systems Assembled",
         "subtitle": "Clustering 5 Complementary Specialists for Maximum Conversational Density",
         "visual_type": "art",
-        "visual_file": "cinder-hero-03.jpg",
+        "visual_file": "screen-04-pod-channels.png",
+        "visual_type": "screen",
         "stats": [
             ("POD 07", "5 SPECIALISTS"),
             ("CURATION", "BALANCED PERSPECTIVES"),
@@ -398,7 +400,8 @@ SCENES = [
         "title": "Making Something Happen: The Future of Conferences",
         "subtitle": "From a 12:15 Lunch to an Open-Source Autonomous Controller in 90 Days",
         "visual_type": "screen",
-        "visual_file": "screen-04-pod-channels.png",
+        "visual_file": "cinder-hero-04.jpg",
+        "visual_type": "art",
         "stats": [
             ("90 DAYS", "FROM CHAT TO CODE"),
             ("5 POD MEMBERS", "LIFELONG NETWORK"),

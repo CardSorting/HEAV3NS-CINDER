@@ -75,6 +75,47 @@ function handleRealtimeEvent(event) {
 }
 
 function setupEventListeners() {
+  // Check-In Modal wiring
+  const checkinModal = document.getElementById("checkin-modal");
+  const openCheckin = () => { if (checkinModal) checkinModal.classList.add("open"); };
+  const closeCheckin = () => { if (checkinModal) checkinModal.classList.remove("open"); };
+
+  document.getElementById("btn-open-checkin")?.addEventListener("click", openCheckin);
+  document.getElementById("btn-home-checkin")?.addEventListener("click", openCheckin);
+  document.getElementById("btn-close-checkin")?.addEventListener("click", closeCheckin);
+  document.getElementById("btn-cancel-checkin")?.addEventListener("click", closeCheckin);
+
+  // Form Pod Action wiring
+  document.getElementById("btn-form-pod-action")?.addEventListener("click", async () => {
+    try {
+      const res = await fetch("/api/pods/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seedAttendeeIds: [currentAttendeeId, "att_maya_lin"], theme: "Autonomous Cloud & Systems", targetSize: 5 })
+      });
+      if (res.ok) {
+        await loadPods();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  });
+
+  // Quick Lunch Propose wiring
+  document.getElementById("quick-propose-lunch")?.addEventListener("click", async () => {
+    if (!currentPodId) return;
+    try {
+      await fetch(`/api/pods/${currentPodId}/meetup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senderId: currentAttendeeId, location: "Main Hall East Patio", time: "12:15 PM" })
+      });
+      await loadPodMessages(currentPodId);
+    } catch (e) {
+      console.error(e);
+    }
+  });
+
   document.getElementById("btn-pass")?.addEventListener("click", () => triggerSwipeWithAnimation("pass"));
   document.getElementById("btn-connect")?.addEventListener("click", () => triggerSwipeWithAnimation("like"));
 
