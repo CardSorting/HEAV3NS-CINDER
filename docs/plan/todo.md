@@ -14,7 +14,7 @@
 [x] Add an eventId field to the Attendee, Pod, Match and Message domain entities and update their constructors, toJSON and tests
 [x] Add a ConferenceEvent domain entity for selectable events with id, name, category, dates, timezone, venue and cinder summary
 [x] Add a Session domain field set for absolute startDate, endDate, timezone, sessionType and spaceId while keeping startTime and endTime for display
-[ ] Add a VenueSpace domain entity matching cinder-spaces with name, aliases, kind, floor, capacity, tags and meetupFriendly
+[x] Add a VenueSpace domain entity matching cinder-spaces with name, aliases, kind, floor, capacity, tags and meetupFriendly
 [ ] Add an Announcement domain entity matching cinder-announcements with publishAt, kind, severity, audience and affects
 [ ] Add domain interfaces IEventRepository, IAgendaRepository, ISpaceRepository, IAnnouncementRepository, IPromptRepository, IInteractionRepository and IMessageRepository
 [ ] Implement an Elasticsearch EventRepository that lists eventapp documents with cinder.enabled true, sorted by start date, with category and date filters

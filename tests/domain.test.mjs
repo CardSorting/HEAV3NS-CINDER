@@ -10,6 +10,7 @@ import { Match } from "../src/domain/match.mjs";
 import { Session, SOCIAL_SESSION_TYPES } from "../src/domain/agenda.mjs";
 import { explainMatchRelevance } from "../src/domain/relevanceScore.mjs";
 import { ConferenceEvent, SELECTABLE_CATEGORIES } from "../src/domain/conferenceEvent.mjs";
+import { VenueSpace, findMentionedSpace } from "../src/domain/venueSpace.mjs";
 import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
 
 describe("Domain Entities", () => {
@@ -225,5 +226,38 @@ describe("Session absolute timing", () => {
     assert.throws(() => new Session({ ...seed, startDate: full.startDate }), /provided together/);
     assert.throws(() => new Session({ ...full, endDate: "garbage" }), /valid ISO-8601/);
     assert.throws(() => new Session({ ...full, endDate: "2026-12-23T11:00:00-07:00" }), /must not be before/);
+  });
+});
+
+describe("VenueSpace entity", () => {
+  const V = "urn:ue:place:salt-palace";
+  const terrace = new VenueSpace({ id: "space:sp:east-terrace", name: "East Terrace", kind: "patio", venueId: V,
+    aliases: ["terrace", "patio", "outside", "east terrace"], tags: ["outdoor", "quiet"], capacity: 60, meetupFriendly: true });
+  const cafe = new VenueSpace({ id: "space:sp:tech-cafe", name: "Tech Café", kind: "cafe", venueId: V,
+    aliases: ["cafe", "café", "coffee", "tech cafe"], tags: ["coffee", "seating"], capacity: 80, meetupFriendly: true });
+  const room = new VenueSpace({ id: "space:sp:room-2-04", name: "Room 2.04", venueId: V, aliases: ["2.04", "room 204"] });
+
+  it("matches aliases as whole words, case- and accent-insensitively", () => {
+    assert.ok(terrace.mentionedIn("Let's meet on the PATIO after lunch") > 0);
+    assert.strictEqual(terrace.mentionedIn("patios are nice"), 0);
+    assert.ok(cafe.mentionedIn("grab a coffee at the Tech Cafe?") >= "tech cafe".length);
+    assert.ok(room.mentionedIn("meet outside room 2.04 at 12:30") > 0);
+  });
+
+  it("picks the most specific space mentioned", () => {
+    // "outside" is a terrace alias, but "room 2.04" is the longer, more specific match.
+    assert.strictEqual(findMentionedSpace([terrace, cafe, room], "meet outside room 2.04").id, room.id);
+    assert.strictEqual(findMentionedSpace([terrace, cafe, room], "coffee?").id, cafe.id);
+    assert.strictEqual(findMentionedSpace([terrace, cafe, room], "anywhere works"), null);
+  });
+
+  it("builds the display tag and round-trips", () => {
+    assert.strictEqual(terrace.displayTag(), "Outdoor & Quiet");
+    assert.deepStrictEqual(new VenueSpace(terrace.toJSON()).toJSON(), terrace.toJSON());
+  });
+
+  it("requires an owner and a valid capacity", () => {
+    assert.throws(() => new VenueSpace({ id: "s", name: "x" }), /venueId.*or an event/);
+    assert.throws(() => new VenueSpace({ id: "s", name: "x", venueId: V, capacity: -1 }), /non-negative/);
   });
 });
