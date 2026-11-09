@@ -1,4 +1,4 @@
-<!-- [LAYER: INFRASTRUCTURE] -->
+<!-- [LAYER: UI] -->
 # Elasticsearch data tooling
 
 Scripts, mappings and ingest pipelines that build and maintain CINDER's Elasticsearch data. This is

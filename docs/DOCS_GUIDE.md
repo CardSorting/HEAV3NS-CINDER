@@ -108,3 +108,6 @@ Complete map of the **CINDER** documentation system, combining the **Diátaxis f
 - [api/cli.md](api/cli.md): CLI commands and HTTP REST API routes.
 - [api/errors.md](api/errors.md): Error codes and guided error troubleshooting.
 
+### 10. Project Plan (`docs/plan/`)
+- [plan/todo.md](plan/todo.md): Ordered, dependency-safe todo list of the work remaining to complete the project.
+
