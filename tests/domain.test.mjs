@@ -9,6 +9,7 @@ import { Message } from "../src/domain/message.mjs";
 import { Match } from "../src/domain/match.mjs";
 import { Session } from "../src/domain/agenda.mjs";
 import { explainMatchRelevance } from "../src/domain/relevanceScore.mjs";
+import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
 
 describe("Domain Entities", () => {
   it("creates and validates Attendee entity", () => {
@@ -105,3 +106,15 @@ describe("Domain Entities", () => {
   });
 });
 
+describe("IElasticsearchClient contract", () => {
+  const methods = ["ensureIndex", "indexAttendee", "hybridSearch", "getStatus", "checkHealth",
+    "search", "count", "get", "index", "update", "deleteByQuery", "bulk", "embed", "chatCompletion"];
+
+  for (const name of methods) {
+    it(`declares ${name} and rejects until an adapter implements it`, async () => {
+      const contract = new IElasticsearchClient();
+      assert.strictEqual(typeof contract[name], "function");
+      await assert.rejects(() => contract[name](), new RegExp(`IElasticsearchClient\\.${name} must be implemented`));
+    });
+  }
+});
