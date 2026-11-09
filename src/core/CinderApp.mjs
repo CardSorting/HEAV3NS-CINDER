@@ -159,7 +159,9 @@ export class CinderApp {
       podRepo: this.podRepo,
       attendeeRepo: this.attendeeRepo,
       eventBus: this.eventBus,
-      facilitatorService: this.facilitatorService
+      facilitatorService: this.facilitatorService,
+      messageRepo: this.messageRepo,
+      interactionRepo: this.interactionRepo
     });
 
     this.facilitatorCtrl = new FacilitatorController({

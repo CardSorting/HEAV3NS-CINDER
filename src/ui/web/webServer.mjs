@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { CinderApp } from "../../core/CinderApp.mjs";
 import { ScenarioRunner } from "../../core/ScenarioRunner.mjs";
+import { requestError } from "../../plumbing/requestError.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +29,6 @@ export class CinderWebServer {
     this.scenarioRunner = new ScenarioRunner(this.app);
     /** @type {Map<import("node:http").ServerResponse, string>} SSE client -> eventId it watches */
     this.sseClients = new Map();
-    this.directMessages = new Map();
     this.server = null;
   }
 
@@ -36,7 +36,7 @@ export class CinderWebServer {
     await this.app.initialize();
 
     // Hook domain events to SSE clients, delivered only to clients watching the same event
-    for (const type of ["attendee.checked_in", "match.mutual", "pod.formed", "message.sent", "meetup.pinned", "facilitator.announcement"]) {
+    for (const type of ["attendee.checked_in", "match.mutual", "match.message", "pod.formed", "message.sent", "meetup.pinned", "facilitator.announcement"]) {
       this.app.eventBus.subscribe(type, (payload) => {
         this.eventIdOf(payload)
           .then((eventId) => this.broadcastSSE(type, payload, eventId))
@@ -219,7 +219,7 @@ export class CinderWebServer {
       await this.attendeeIn(event, attendeeId);
       const mutuals = await this.app.discoveryCtrl.getMutualMatches(attendeeId, { eventId: event.id });
       const pods = await this.app.podCtrl.listPods(event.id);
-      const enriched = mutuals.map((item) => {
+      const enriched = await Promise.all(mutuals.map(async (item) => {
         const sharedPod = pods.find(
           (p) => p.memberIds.includes(attendeeId) && item.partner && p.memberIds.includes(item.partner.id)
         );
@@ -227,9 +227,9 @@ export class CinderWebServer {
           ...item,
           sharedPodId: sharedPod ? sharedPod.id : null,
           sharedPodName: sharedPod ? sharedPod.name : null,
-          messages: this.directMessages.get(item.match.id) || []
+          messages: await this.app.commCtrl.listDirectMessages(item.match.id)
         };
-      });
+      }));
       return this.sendJson(res, enriched);
     }
 
@@ -238,19 +238,13 @@ export class CinderWebServer {
       const matchId = parts[3];
       const body = await this.readJsonBody(req);
       const event = await this.eventFor(body.eventId);
-      const sender = await this.attendeeIn(event, body.senderId);
-      const msg = {
-        id: `dm_${Date.now()}`,
+      await this.attendeeIn(event, body.senderId);
+      const msg = await this.app.commCtrl.sendDirectMessage({
         matchId,
         senderId: body.senderId,
-        senderName: sender ? sender.name : "Attendee",
         content: body.content,
-        timestamp: new Date().toISOString()
-      };
-      const existing = this.directMessages.get(matchId) || [];
-      existing.push(msg);
-      this.directMessages.set(matchId, existing);
-      this.broadcastSSE("match.message", { matchId, message: msg }, event.id);
+        eventId: event.id
+      });
       return this.sendJson(res, msg);
     }
 
@@ -461,11 +455,4 @@ export class CinderWebServer {
       req.on("error", reject);
     });
   }
-}
-
-function requestError(code, status, message) {
-  const err = new Error(message);
-  err.code = code;
-  err.status = status;
-  return err;
 }

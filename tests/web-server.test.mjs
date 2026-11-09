@@ -195,5 +195,33 @@ describe("CinderWebServer HTTP & API Routes", () => {
       assert.strictEqual(reset.eventId, SEED);
       assert.ok(reset.feed.candidates.some((c) => c.profile.id === "att_marcus_vance"), "passed attendee is suggested again");
     });
+
+    it("stores direct messages through the controller and only lets match participants send", async () => {
+      const post = (path, body) => fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      await post("/api/swipe", { fromAttendeeId: "att_jordan_taylor", toAttendeeId: "att_elena_rostova", action: "like" });
+      const liked = await (await post("/api/swipe", { fromAttendeeId: "att_elena_rostova", toAttendeeId: "att_jordan_taylor", action: "like" })).json();
+      assert.strictEqual(liked.isMutual, true);
+      const matchId = liked.match.id;
+
+      const sent = await post(`/api/matches/${matchId}/messages`, { senderId: "att_jordan_taylor", content: "  Vector retrieval chat at lunch?  " });
+      assert.strictEqual(sent.status, 200);
+      const dm = await sent.json();
+      assert.strictEqual(dm.content, "Vector retrieval chat at lunch?");
+      assert.strictEqual(dm.eventId, SEED);
+      assert.ok(dm.id.startsWith("dm_"));
+
+      const matches = await (await fetch(`${baseUrl}/api/matches?attendeeId=att_elena_rostova`)).json();
+      const m = matches.find((x) => x.match.id === matchId);
+      assert.deepStrictEqual(m.messages.map((x) => x.content), ["Vector retrieval chat at lunch?"]);
+
+      const outsider = await post(`/api/matches/${matchId}/messages`, { senderId: "att_marcus_vance", content: "hi" });
+      assert.strictEqual(outsider.status, 403);
+      assert.strictEqual((await outsider.json()).code, "NOT_A_PARTICIPANT");
+      const unknown = await post("/api/matches/match_nope/messages", { senderId: "att_jordan_taylor", content: "hi" });
+      assert.strictEqual(unknown.status, 404);
+      const empty = await post(`/api/matches/${matchId}/messages`, { senderId: "att_jordan_taylor", content: "   " });
+      assert.strictEqual(empty.status, 400);
+      assert.strictEqual(server.directMessages, undefined, "web layer keeps no message state");
+    });
   });
 });

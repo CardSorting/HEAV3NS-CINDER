@@ -31,7 +31,7 @@
 [x] Scope SSE broadcasts by eventId so clients only receive realtime events for their selected event
 [x] Move swipe and match state out of DiscoveryController maps into the InteractionRepository
 [x] Move the discovery reset logic from webServer into a DiscoveryController method so the UI layer holds no state
-[ ] Move direct-message storage from the webServer directMessages map into CommunicationController and the MessageRepository
+[x] Move direct-message storage from the webServer directMessages map into CommunicationController and the MessageRepository
 [ ] Move meetup pinning and RSVP logic from webServer routes into CommunicationController methods
 [ ] Change CheckInController to save registrations through the Elasticsearch repository and stop computing 32-dim embeddings in live mode
 [ ] Replace the hybridSearch implementation in live mode with an Elasticsearch RRF retriever combining BM25 on profile fields, kNN on the stored profile vector, and kNN on looking_for text via query_vector_builder

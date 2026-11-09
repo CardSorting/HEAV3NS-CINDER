@@ -1,5 +1,7 @@
 /** [LAYER: CORE] */
 
+import { requestError } from "../plumbing/requestError.mjs";
+
 /**
  * Use cases for choosing an event: list selectable events and resolve the active event of a request.
  * Everything else in CINDER (check-in, discovery, pods, agenda) is scoped by the resolved event's id.
@@ -72,11 +74,4 @@ export class EventController {
   remember(event) {
     if (event?.isSelectable?.()) this.cache.set(event.id, { event, at: Date.now() });
   }
-}
-
-function requestError(code, status, message) {
-  const err = new Error(message);
-  err.code = code;
-  err.status = status;
-  return err;
 }
