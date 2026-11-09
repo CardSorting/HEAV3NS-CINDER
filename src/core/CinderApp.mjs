@@ -101,7 +101,7 @@ export class CinderApp {
       const idx = this.config.indices;
       const defaultEventId = opts.defaultEventId || null;
       this.defaultEventId = defaultEventId;
-      this.esClient = opts.esClient || new ElasticsearchClient({ config: this.config, legacyAttendeeIndex: false });
+      this.esClient = opts.esClient || new ElasticsearchClient({ config: this.config, legacyAttendeeIndex: false, discoveryIndex: idx.registrations });
       const es = this.esClient;
       this.eventRepo = new ElasticsearchEventRepository({ esClient: es, index: idx.events, toEntity: ENTITY.event });
       this.attendeeRepo = new ElasticsearchAttendeeRepository({ esClient: es, index: idx.registrations, defaultEventId, toEntity: ENTITY.attendee });

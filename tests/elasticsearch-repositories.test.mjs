@@ -13,6 +13,7 @@ import { ElasticsearchAgendaRepository, fromSessionDoc } from "../src/infrastruc
 import { ElasticsearchSpaceRepository } from "../src/infrastructure/ElasticsearchSpaceRepository.mjs";
 import { ElasticsearchAnnouncementRepository } from "../src/infrastructure/ElasticsearchAnnouncementRepository.mjs";
 import { ElasticsearchPromptRepository } from "../src/infrastructure/ElasticsearchPromptRepository.mjs";
+import { buildDiscoveryQuery } from "../src/infrastructure/discoveryRetriever.mjs";
 
 const EV = "urn:ue:event:devsummit-2026";
 const MAPPINGS = JSON.parse(readFileSync(new URL("../elasticsearch/cinder/indices.json", import.meta.url), "utf8"));
@@ -274,3 +275,36 @@ describe("ElasticsearchAnnouncementRepository and ElasticsearchPromptRepository"
     assert.deepStrictEqual(es.of("search")[0].body.knn.filter, { term: { phase: "deep-dive" } });
   });
 });
+
+describe("Live discovery retriever (buildDiscoveryQuery)", () => {
+  const base = { eventId: EV, queryText: "Kubernetes eBPF", lookingForText: "observability engineers", embedModel: ".m", excludeIds: ["att_me", "att_seen"], limit: 5 };
+
+  it("fuses BM25, profile kNN and looking_for kNN with RRF", () => {
+    const { body, retrievers } = buildDiscoveryQuery({ ...base, profileVector: vec() });
+    assert.deepStrictEqual(retrievers, ["bm25", "profile_knn", "looking_for_knn"]);
+    const rrf = body.retriever.rrf;
+    assert.strictEqual(rrf.retrievers.length, 3);
+    assert.strictEqual(rrf.retrievers[1].knn.query_vector.length, 1024);
+    assert.deepStrictEqual(rrf.retrievers[2].knn.query_vector_builder, { text_embedding: { model_id: ".m", model_text: "observability engineers" } });
+    assert.strictEqual(body.size, 5);
+    assert.deepStrictEqual(body._source.excludes, ["searchText", "embedding"]);
+  });
+
+  it("filters every retriever to the event and excludes self and swiped attendees", () => {
+    const { body } = buildDiscoveryQuery({ ...base, profileVector: vec() });
+    const [bm25, profile, lookingFor] = body.retriever.rrf.retrievers;
+    for (const f of [bm25.standard.query.bool, profile.knn.filter.bool, lookingFor.knn.filter.bool]) {
+      assert.deepStrictEqual(f.filter, [{ term: { eventId: EV } }]);
+      assert.deepStrictEqual(f.must_not, [{ ids: { values: ["att_me", "att_seen"] } }]);
+    }
+  });
+
+  it("drops retrievers without input and requires an event", () => {
+    assert.deepStrictEqual(buildDiscoveryQuery({ ...base, profileVector: [] }).retrievers, ["bm25", "looking_for_knn"]);
+    const single = buildDiscoveryQuery({ ...base, queryText: "", lookingForText: "" , profileVector: vec() });
+    assert.ok(single.body.retriever.knn, "a single retriever is used directly, without RRF");
+    assert.throws(() => buildDiscoveryQuery({ ...base, eventId: null }), /requires an eventId/);
+    assert.throws(() => buildDiscoveryQuery({ ...base, queryText: "", lookingForText: "" }), /needs query text/);
+  });
+});
+

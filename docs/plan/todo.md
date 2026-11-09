@@ -34,7 +34,7 @@
 [x] Move direct-message storage from the webServer directMessages map into CommunicationController and the MessageRepository
 [x] Move meetup pinning and RSVP logic from webServer routes into CommunicationController methods
 [x] Change CheckInController to save registrations through the Elasticsearch repository and stop computing 32-dim embeddings in live mode
-[ ] Replace the hybridSearch implementation in live mode with an Elasticsearch RRF retriever combining BM25 on profile fields, kNN on the stored profile vector, and kNN on looking_for text via query_vector_builder
+[x] Replace the hybridSearch implementation in live mode with an Elasticsearch RRF retriever combining BM25 on profile fields, kNN on the stored profile vector, and kNN on looking_for text via query_vector_builder
 [ ] Fetch stored vectors with _source exclude_vectors false wherever a stored embedding is reused as a kNN query
 [ ] Weight the looking_for retriever above profile similarity so discovery surfaces complementary attendees rather than lookalikes
 [ ] Exclude the requesting attendee and previously swiped attendees from discovery with filters inside every retriever

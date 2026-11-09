@@ -5,6 +5,7 @@ import { computeBM25Score, tokenizeText, calculateTermFrequencies } from "../plu
 import { cosineSimilarity } from "../plumbing/vectorMath.mjs";
 import { reciprocalRankFusion } from "../plumbing/rrfRanker.mjs";
 import { DEFAULT_EMBED_MODEL } from "../plumbing/elasticConfig.mjs";
+import { buildDiscoveryQuery } from "./discoveryRetriever.mjs";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_CHAT_MODEL = ".anthropic-claude-5-sonnet-chat_completion";
@@ -59,6 +60,8 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * @param {number} [options.timeoutMs=5000] - Default per-request timeout
    * @param {string} [options.chatModel] - Chat-completion inference endpoint id
    * @param {typeof fetch} [options.fetchImpl] - Injectable fetch (tests)
+   * @param {string|null} [options.discoveryIndex=null] - registrations index for live discovery; when set
+   *   and the cluster is live, hybridSearch runs an Elasticsearch RRF retriever instead of the embedded engine
    * @param {boolean} [options.legacyAttendeeIndex=true] - create/mirror the old 32-dim `cinder_attendees`
    *   index in live mode. The composition root turns this off when the cinder-* repositories are in use.
    */
@@ -77,6 +80,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     this.lastHealthCheck = null;
     this.fetchImpl = options.fetchImpl || ((...args) => fetch(...args));
     this.legacyAttendeeIndex = options.legacyAttendeeIndex !== false;
+    this.discoveryIndex = options.discoveryIndex || null;
     this.isLiveCluster = false;
     this.clusterInfo = null;
 
@@ -293,9 +297,42 @@ export class ElasticsearchClient extends IElasticsearchClient {
   }
 
   /**
-   * Performs Elasticsearch Hybrid Search (BM25 + kNN dense_vector + RRF).
+   * Hybrid attendee search (BM25 + dense vector kNN + RRF).
+   * Live (discoveryIndex set and cluster live): Elasticsearch RRF retriever over the registrations index,
+   * scoped to `eventId`, using the stored profile vector and the `looking_for` text.
+   * Otherwise: the embedded in-process engine.
+   * @param {Object} params
+   * @param {string} params.queryText
+   * @param {number[]} [params.queryVector] - embedded mode: 32-dim vector; live mode: stored 1024-dim profile vector
+   * @param {string[]} [params.excludeIds]
+   * @param {number} [params.limit]
+   * @param {string} [params.eventId] - live mode: event to search in (required live)
+   * @param {string} [params.lookingForText] - live mode: requester's looking_for
    */
-  async hybridSearch({
+  async hybridSearch(params) {
+    if (this.discoveryIndex && this.isLiveCluster && params.eventId) return this.liveHybridSearch(params);
+    return this.embeddedHybridSearch(params);
+  }
+
+  /** Live discovery: one Elasticsearch RRF retriever request (see discoveryRetriever.mjs). */
+  async liveHybridSearch({ queryText, queryVector, excludeIds = [], limit = 10, eventId, lookingForText }) {
+    const { body, retrievers } = buildDiscoveryQuery({
+      eventId, queryText, profileVector: queryVector, lookingForText, excludeIds, limit, embedModel: this.embedModel
+    });
+    const res = await this.search(this.discoveryIndex, body);
+    return {
+      hits: res.hits.map((h) => ({
+        id: h.id, score: h.score, rrfScore: h.score, bm25Score: null, knnScore: null, bm25Rank: null, knnRank: null, source: h.source
+      })),
+      totalHits: res.total,
+      tookMs: res.tookMs,
+      querySpec: { index: this.discoveryIndex, retrievers, ...summarizeVectors(body) },
+      engine: "elasticsearch"
+    };
+  }
+
+  /** Embedded in-process hybrid search (offline mode and fallback). */
+  async embeddedHybridSearch({
     queryText,
     queryVector,
     excludeIds = [],
@@ -563,6 +600,14 @@ export class ElasticsearchClient extends IElasticsearchClient {
     }
     return { content, modelId: model };
   }
+}
+
+/** Copy of a search body with long query vectors shortened for display (the request itself is unchanged). */
+function summarizeVectors(body) {
+  return JSON.parse(JSON.stringify(body, (key, value) =>
+    key === "query_vector" && Array.isArray(value)
+      ? [...value.slice(0, 4).map((v) => Number(v.toFixed(4))), `…(${value.length} dims)`]
+      : value));
 }
 
 /** Adds `exclude_vectors: false` to a search body's `_source` option without dropping filters. */

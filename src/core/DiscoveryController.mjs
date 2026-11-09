@@ -54,7 +54,9 @@ export class DiscoveryController {
       queryText,
       queryVector: source.embedding,
       excludeIds: excludedIds,
-      limit: scopeEventId ? Math.max(limit * 4, 50) : limit
+      limit: scopeEventId ? Math.max(limit * 4, 50) : limit,
+      eventId: scopeEventId || undefined,
+      lookingForText: source.looking_for
     });
     const scopedHits = esResult.hits
       .filter((hit) => !scopeEventId || hit.source?.eventId === scopeEventId)
