@@ -17,7 +17,7 @@
 [x] Add a VenueSpace domain entity matching cinder-spaces with name, aliases, kind, floor, capacity, tags and meetupFriendly
 [x] Add an Announcement domain entity matching cinder-announcements with publishAt, kind, severity, audience and affects
 [x] Add domain interfaces IEventRepository, IAgendaRepository, ISpaceRepository, IAnnouncementRepository, IPromptRepository, IInteractionRepository and IMessageRepository
-[ ] Implement an Elasticsearch EventRepository that lists eventapp documents with cinder.enabled true, sorted by start date, with category and date filters
+[x] Implement an Elasticsearch EventRepository that lists eventapp documents with cinder.enabled true, sorted by start date, with category and date filters
 [ ] Implement an Elasticsearch AttendeeRepository on cinder-registrations that adds eventId, personId and role, drops the 32-dim embedding, and filters every query by eventId
 [ ] Write registrations with refresh wait_for so a checked-in attendee is immediately discoverable and embedded by the cinder-embed-registration pipeline
 [ ] Implement an Elasticsearch InteractionRepository on cinder-interactions for swipes and mutual matches scoped by eventId
