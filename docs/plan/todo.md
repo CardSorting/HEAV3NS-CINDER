@@ -56,7 +56,7 @@
 [x] Verify the seed attendees produce the scripted story, including the Alex Chen and Maya Lin mutual match, against live discovery
 [x] Update ScenarioRunner to run the ten-step demonstration against the demo event in live mode and in offline mode
 [x] Update existing tests for eventId scoping and repository injection and confirm npm test passes
-[ ] Run elasticsearch/cinder/compat_check.py and npm run check and fix any findings
+[x] Run elasticsearch/cinder/compat_check.py and npm run check and fix any findings
 [ ] Update README.md, docs/GETTING_STARTED.md and docs/OPERATIONS.md with .env setup, data tooling commands and live mode
 [ ] Rehearse the full ten-step demonstration against the live cluster and confirm offline fallback works with the network disabled
 [ ] Merge the integration branch into master and tag the release
