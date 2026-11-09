@@ -32,8 +32,9 @@ export class MemoryPodRepository extends IPodRepository {
     return null;
   }
 
-  async listAll() {
-    return Array.from(this.pods.values());
+  async listAll(eventId) {
+    const all = Array.from(this.pods.values());
+    return eventId ? all.filter((p) => p.eventId === eventId) : all;
   }
 
   clear() {

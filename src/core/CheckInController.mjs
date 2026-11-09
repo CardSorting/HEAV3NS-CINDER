@@ -74,10 +74,11 @@ export class CheckInController {
   }
 
   /**
-   * Lists all checked in attendees.
+   * Lists checked in attendees, optionally only those registered for one event.
+   * @param {string} [eventId]
    */
-  async listAttendees() {
-    return this.attendeeRepo.listAll();
+  async listAttendees(eventId) {
+    return this.attendeeRepo.listAll(eventId);
   }
 }
 

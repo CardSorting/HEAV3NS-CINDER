@@ -16,6 +16,7 @@ export class Message {
    * @param {string} [props.timestamp]
    * @param {boolean} [props.pinned=false]
    * @param {Record<string, any>} [props.metadata={}]
+   * @param {string|null} [props.eventId=null] - Event the pod (and so the message) belongs to
    */
   constructor({
     id,
@@ -26,10 +27,14 @@ export class Message {
     content,
     timestamp = new Date().toISOString(),
     pinned = false,
-    metadata = {}
+    metadata = {},
+    eventId = null
   }) {
     if (!id || !podId || !content) {
       throw new Error("Message requires id, podId, and content");
+    }
+    if (eventId !== null && (typeof eventId !== "string" || eventId.trim() === "")) {
+      throw new Error("Message eventId must be a non-empty string or null");
     }
 
     this.id = id;
@@ -41,6 +46,7 @@ export class Message {
     this.timestamp = timestamp;
     this.pinned = Boolean(pinned);
     this.metadata = metadata ? { ...metadata } : {};
+    this.eventId = eventId;
   }
 
   toJSON() {
@@ -53,7 +59,8 @@ export class Message {
       content: this.content,
       timestamp: this.timestamp,
       pinned: this.pinned,
-      metadata: this.metadata
+      metadata: this.metadata,
+      eventId: this.eventId
     };
   }
 }

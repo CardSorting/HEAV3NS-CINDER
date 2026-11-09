@@ -33,10 +33,11 @@ export class IPodRepository {
   }
 
   /**
-   * Lists all existing pods.
+   * Lists pods, optionally only those formed at one event.
+   * @param {string} [_eventId] - eventapp @id; all pods when omitted
    * @returns {Promise<import("../pod.mjs").Pod[]>}
    */
-  async listAll() {
+  async listAll(_eventId) {
     throw new Error("IPodRepository.listAll must be implemented by an infrastructure adapter.");
   }
 }

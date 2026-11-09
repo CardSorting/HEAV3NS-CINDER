@@ -21,6 +21,7 @@ export class Attendee {
    * @param {string[]} [props.topics]
    * @param {number[]} [props.embedding]
    * @param {string} [props.checked_in_at]
+   * @param {string|null} [props.eventId=null] - Event (eventapp @id) this registration belongs to
    */
   constructor({
     id,
@@ -36,13 +37,17 @@ export class Attendee {
     looking_for = "",
     topics = [],
     embedding = [],
-    checked_in_at = new Date().toISOString()
+    checked_in_at = new Date().toISOString(),
+    eventId = null
   }) {
     if (!id || typeof id !== "string") {
       throw new Error("Attendee must have a valid string id");
     }
     if (!name || typeof name !== "string") {
       throw new Error("Attendee must have a valid string name");
+    }
+    if (eventId !== null && (typeof eventId !== "string" || eventId.trim() === "")) {
+      throw new Error("Attendee eventId must be a non-empty string or null");
     }
 
     this.id = id;
@@ -59,6 +64,7 @@ export class Attendee {
     this.topics = Array.isArray(topics) ? [...topics] : [];
     this.embedding = Array.isArray(embedding) ? [...embedding] : [];
     this.checked_in_at = checked_in_at;
+    this.eventId = eventId;
   }
 
   /**
@@ -99,7 +105,8 @@ export class Attendee {
       looking_for: this.looking_for,
       topics: this.topics,
       embedding: this.embedding,
-      checked_in_at: this.checked_in_at
+      checked_in_at: this.checked_in_at,
+      eventId: this.eventId
     };
   }
 }

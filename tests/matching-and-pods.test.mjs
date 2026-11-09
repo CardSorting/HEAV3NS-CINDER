@@ -97,3 +97,32 @@ describe("CINDER Matching and Pod Orchestration", () => {
   });
 });
 
+describe("Swipe and match state lives in the InteractionRepository", () => {
+  it("excludes swiped attendees, forms mutual matches, and resets passes without losing matches", async () => {
+    const app = new CinderApp();
+    await app.initialize();
+    const ev = app.defaultEventId;
+    assert.strictEqual(app.discoveryCtrl.swipes, undefined, "controller holds no swipe map");
+
+    await app.discoveryCtrl.recordSwipe({ fromAttendeeId: "att_alex_chen", toAttendeeId: "att_jordan_taylor", action: "pass" });
+    await app.discoveryCtrl.recordSwipe({ fromAttendeeId: "att_alex_chen", toAttendeeId: "att_maya_lin", action: "like" });
+    assert.deepStrictEqual((await app.interactionRepo.listSwipedIds(ev, "att_alex_chen")).sort(), ["att_jordan_taylor", "att_maya_lin"]);
+
+    const feed = await app.discoveryCtrl.getDiscoveryFeed("att_alex_chen", 10);
+    const shown = feed.candidates.map((c) => c.profile.id);
+    assert.ok(!shown.includes("att_jordan_taylor") && !shown.includes("att_maya_lin"), "swiped attendees are excluded");
+
+    const back = await app.discoveryCtrl.recordSwipe({ fromAttendeeId: "att_maya_lin", toAttendeeId: "att_alex_chen", action: "like" });
+    assert.strictEqual(back.isMutual, true);
+    assert.strictEqual(back.match.eventId, ev);
+    assert.strictEqual((await app.interactionRepo.findMatchById(back.match.id)).mutual, true);
+    const matches = await app.discoveryCtrl.getMutualMatches("att_alex_chen");
+    assert.deepStrictEqual(matches.map((m) => m.partner.id), ["att_maya_lin"]);
+
+    await app.interactionRepo.deleteSwipes(ev, "att_alex_chen", { action: "pass" });
+    assert.deepStrictEqual(await app.interactionRepo.listSwipedIds(ev, "att_alex_chen"), ["att_maya_lin"]);
+    assert.strictEqual((await app.discoveryCtrl.getMutualMatches("att_maya_lin")).length, 1, "match survives reset");
+    assert.strictEqual(await app.discoveryCtrl.hasLiked("att_maya_lin", "att_alex_chen"), true);
+  });
+});
+
