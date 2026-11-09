@@ -1,25 +1,59 @@
 /** [LAYER: UI] */
 import { useEffect, useState } from 'react';
-import { ArrowRight, ArrowUpRight, Check, Heart, MapPin, Sparkles, UsersRound, X } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, CalendarDays, Check, Heart, MapPin, Sparkles, UsersRound, X } from 'lucide-react';
 import { Avatar, Empty, SectionHeading, Tags } from './components';
-import type { Activity, Agenda, Attendee, Candidate, Match, Page, Pod } from './types';
-import hero from '../../public/assets/cinder-conference-hero.jpg';
+import type { Activity, Agenda, Attendee, Candidate, Match, Message, Page, Pod } from './types';
 import { AgendaSettings } from './AgendaSettings';
 import { schedulePosition } from './schedule';
 import type { ScheduleSettings } from './schedule';
 
 type Go = (page: Page) => void;
-export function HomeScreen({ attendee, candidates, matches, pods, agenda, go }: { attendee: Attendee; candidates: Candidate[]; matches: Match[]; pods: Pod[]; agenda: Agenda; go: Go }) {
+export function HomeScreen({ attendee, candidates, matches, pods, agenda, activity, latestMessage, go }: { attendee: Attendee; candidates: Candidate[]; matches: Match[]; pods: Pod[]; agenda: Agenda; activity: Activity[]; latestMessage?: Message; go: Go }) {
   const pod = pods[0], session = agenda.sessions[0], candidate = candidates[0];
-  return <div className="home-page">
-    <div className="page-top"><div><p className="overline">YOUR CONFERENCE COMPANION</p><h1>Good to see you, {attendee.name.split(' ')[0]}<span className="orange">.</span></h1><p className="page-subtitle">A little more connection. A lot more possibility.</p></div><span className="conference-label"><span className="status-dot"/> CLOUD &amp; AI SUMMIT 2026</span></div>
-    <section className="hero" style={{ backgroundImage: `linear-gradient(90deg, rgba(13,26,27,.98) 0%, rgba(13,26,27,.91) 48%, rgba(13,26,27,.30) 100%), url(${hero})` }}><div className="hero-copy"><span className="hero-label"><Sparkles size={15}/> PEOPLE MAKE THE CONFERENCE</span><h2>Good things start<br/>with a hello<span className="orange">.</span></h2><p>Find people who share your curiosity, bring a different perspective, and make the most of your time here.</p><button className="button button-orange" onClick={() => go('discover')}>Discover your people <ArrowRight size={17}/></button></div><div className="hero-caption">CLOUD &amp; AI SUMMIT <span> / </span> YOUR SPACE TO CONNECT</div></section>
-    <div className="home-grid"><div className="home-main"><SectionHeading title="Your next move"/><div className="next-move"><div className="next-icon"><CompassIcon/></div><div><span className="small-label">A GOOD PLACE TO START</span><h3>{candidate ? `Meet ${candidate.profile.name.split(' ')[0]}` : 'Explore your connections'}</h3><p>{candidate ? candidate.explanation.synergySummary : 'Your next conversation could be one introduction away.'}</p></div><button className="round-arrow" aria-label="Go to discovery" onClick={() => go('discover')}><ArrowUpRight size={20}/></button></div>
-      <SectionHeading title="Your people" action="View matches" onAction={() => go('matches')}/><div className="people-preview">{matches.length ? matches.slice(0, 3).map(m => m.partner && <button className="person-row" key={m.match.id} onClick={() => go('matches')}><Avatar person={m.partner}/><span><strong>{m.partner.name}</strong><small>{m.partner.title} {m.partner.company && `· ${m.partner.company}`}</small></span><ArrowUpRight size={17}/></button>) : <div className="inline-empty"><span>No connections just yet.</span><button className="text-link" onClick={() => go('discover')}>Start discovering <ArrowRight size={15}/></button></div>}</div>
-    </div><aside className="home-aside"><SectionHeading title="Your Pod" action="Open" onAction={() => go('pods')}/><div className="side-surface pod-summary"><div className="pod-symbol"><MessagesIcon/></div><h3>{pod ? pod.name : 'A space to connect'}</h3><p>{pod ? `${pod.memberIds.length} members · ${pod.topic}` : 'Your Pod brings a small group together for conversation and shared ideas.'}</p><button className="text-link" onClick={() => go('pods')}>{pod ? 'Go to your Pod' : 'Explore Pods'} <ArrowRight size={15}/></button></div><SectionHeading title="From the agenda" action="View all" onAction={() => go('agenda')}/><div className="side-surface agenda-preview">{session ? <><span className="small-label">{session.startTime} — {session.endTime}</span><h3>{session.title}</h3><p><MapPin size={14}/> {session.room}</p></> : <p>The conference agenda is not available yet.</p>}</div></aside></div>
+  const updates = activity.slice(-3).reverse();
+  return <div className="home-workspace">
+    <div className="home-welcome">
+      <div><p className="overline">CLOUD &amp; AI SUMMIT 2026</p><h1>Welcome back, {attendee.name.split(' ')[0]}<span className="orange">.</span></h1><p className="page-subtitle">Here’s what’s happening in your conference space.</p></div>
+      <span className="conference-label"><span className="status-dot"/> YOUR CONFERENCE</span>
+    </div>
+
+    <section className="home-agenda-feature" aria-labelledby="home-agenda-title">
+      <div className="home-agenda-symbol"><CalendarDaysIcon/></div>
+      <div className="home-agenda-copy"><span className="small-label">FROM YOUR AGENDA</span>{session ? <><h2 id="home-agenda-title">{session.title}</h2><p>{session.startTime}–{session.endTime} <span>·</span> {session.room}</p></> : <><h2 id="home-agenda-title">Make space for a good conversation.</h2><p>The conference agenda will appear here when it’s available.</p></>}</div>
+      <button className="button button-dark home-agenda-action" onClick={() => go('agenda')}>View agenda <ArrowRight size={16}/></button>
+    </section>
+
+    <div className="home-grid home-utility-grid">
+      <div className="home-main">
+        <section className="home-focus-card" aria-labelledby="home-next-title">
+          <div className="home-focus-heading"><SectionHeading title="A good next move"/><span className="home-focus-icon"><CompassIcon/></span></div>
+          <div className="home-focus-content"><div><span className="small-label">{candidate ? 'A PERSON TO MEET' : 'KEEP EXPLORING'}</span><h2 id="home-next-title">{candidate ? `Meet ${candidate.profile.name.split(' ')[0]}` : 'See who else is here'}</h2><p>{candidate ? candidate.explanation.synergySummary : 'Browse attendee recommendations and find a useful place to start.'}</p></div><button className="button button-outline" onClick={() => go('discover')}>Discover people <ArrowRight size={16}/></button></div>
+        </section>
+
+        <div className="home-section-heading"><SectionHeading title="Your connections" action="View all" onAction={() => go('matches')}/><span className="home-count">{matches.length} {matches.length === 1 ? 'connection' : 'connections'}</span></div>
+        <div className="people-preview">{matches.length ? matches.slice(0, 3).map(m => m.partner && <button className="person-row" key={m.match.id} onClick={() => go('matches')}><Avatar person={m.partner}/><span><strong>{m.partner.name}</strong><small>{m.partner.title} {m.partner.company && `· ${m.partner.company}`}</small></span><ArrowUpRight size={17}/></button>) : <div className="inline-empty"><span>No connections yet. They’ll appear here when interest is mutual.</span><button className="text-link" onClick={() => go('discover')}>Start discovering <ArrowRight size={15}/></button></div>}</div>
+
+        <div className="home-section-heading home-updates-heading"><SectionHeading title="Latest updates" action="View activity" onAction={() => go('activity')}/></div>
+        <div className="home-update-list">{updates.length ? updates.map(item => <button className="home-update" key={item.id} onClick={() => go(item.page)}><span className="home-update-mark"><Sparkles size={15}/></span><span><strong>{item.text}</strong><small>{new Date(item.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</small></span><ArrowUpRight size={16}/></button>) : <div className="inline-empty">New matches, Pod activity, and facilitator updates will appear here.</div>}</div>
+      </div>
+
+      <aside className="home-aside home-utility-aside">
+        <div className="home-section-heading"><SectionHeading title="Your Pod" action="Open" onAction={() => go('pods')}/></div>
+        <section className="side-surface home-pod-card">
+          <div className="pod-symbol"><MessagesIcon/></div><span className="small-label">{pod ? `${pod.memberIds.length} MEMBERS` : 'YOUR SMALL-GROUP SPACE'}</span>
+          <h2>{pod ? pod.name : 'A space to connect'}</h2>
+          <p>{pod ? pod.topic : 'Your Pod brings a small group together around shared interests and ideas.'}</p>
+          {pod?.pinnedMeetup && <div className="home-pinned-meetup"><MapPin size={15}/><span><strong>{pod.pinnedMeetup.location}</strong><small>{pod.pinnedMeetup.time}</small></span></div>}
+          {latestMessage && <div className={`home-last-message${latestMessage.senderType === 'facilitator' ? ' is-facilitator' : ''}`}><span>{latestMessage.senderType === 'facilitator' ? 'FACILITATOR' : latestMessage.senderName}</span><p>{latestMessage.content}</p></div>}
+          <button className="text-link" onClick={() => go('pods')}>{pod ? 'Open your Pod' : 'Explore Pods'} <ArrowRight size={15}/></button>
+        </section>
+        <div className="home-quick-links"><button onClick={() => go('matches')}><span><Heart size={16}/></span><b>Matches</b><small>{matches.length}</small><ArrowUpRight size={16}/></button><button onClick={() => go('agenda')}><span><CalendarDaysIcon/></span><b>Agenda</b><small>{agenda.sessions.length} sessions</small><ArrowUpRight size={16}/></button></div>
+      </aside>
+    </div>
   </div>;
 }
 function CompassIcon() { return <Sparkles size={22}/>; }
+function CalendarDaysIcon() { return <CalendarDays size={20}/>; }
 function MessagesIcon() { return <span className="pod-hash">#</span>; }
 
 export function DiscoverScreen({ candidates, busy, swipe, reset }: { candidates: Candidate[]; busy: boolean; swipe: (action: 'like' | 'pass') => void; reset: () => void }) {
