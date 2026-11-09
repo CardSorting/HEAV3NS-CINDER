@@ -33,7 +33,8 @@ export class DiscoveryController {
    * @param {string} [options.eventId] - only suggest attendees of this event (defaults to the source's event)
    */
   async getDiscoveryFeed(attendeeId, limit = 10, { eventId } = {}) {
-    const source = await this.attendeeRepo.findById(attendeeId);
+    // The stored profile vector is reused as the kNN query vector, so load it explicitly.
+    const source = await this.attendeeRepo.findById(attendeeId, { includeVectors: true });
     if (!source) {
       throw new Error(`Attendee ${attendeeId} not found`);
     }

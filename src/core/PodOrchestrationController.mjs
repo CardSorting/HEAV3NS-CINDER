@@ -56,7 +56,7 @@ export class PodOrchestrationController {
     if (selectedIds.size < targetSize) {
       const seedProfiles = [];
       for (const sid of selectedIds) {
-        const att = await this.attendeeRepo.findById(sid);
+        const att = await this.attendeeRepo.findById(sid, { includeVectors: true });
         if (att) seedProfiles.push(att);
       }
 

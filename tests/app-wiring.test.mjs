@@ -92,4 +92,21 @@ describe("CinderApp composition root", () => {
     const local = await offline.checkInCtrl.checkIn({ name: "Offline Person", title: "SRE" });
     assert.strictEqual(local.embedding.length, 32, "offline mode keeps the hashed embedding");
   });
+
+  it("loads the requester's stored vector and passes it to the live retriever", async () => {
+    const sentParams = [];
+    const app = new CinderApp({ config: unreachable, clock, defaultEventId: DEMO,
+      esClient: { legacyAttendeeIndex: false, async checkHealth() { return { live: true }; },
+        async hybridSearch(p) { sentParams.push(p); return { hits: [], totalHits: 0, tookMs: 1, querySpec: {} }; } } });
+    const options = [];
+    app.attendeeRepo.findById = async (id, opts) => { options.push(opts); return { id, eventId: DEMO, interests: ["Kubernetes"], topics: [], projects: "", challenges: "",
+      looking_for: "Observability engineers", embedding: Array(1024).fill(0.01) }; };
+    app.interactionRepo.listSwipedIds = async () => ["att_seen"];
+    await app.discoveryCtrl.getDiscoveryFeed("att_me", 5);
+    assert.deepStrictEqual(options[0], { includeVectors: true });
+    assert.strictEqual(sentParams[0].queryVector.length, 1024);
+    assert.strictEqual(sentParams[0].eventId, DEMO);
+    assert.strictEqual(sentParams[0].lookingForText, "Observability engineers");
+    assert.deepStrictEqual(sentParams[0].excludeIds, ["att_me", "att_seen"]);
+  });
 });
