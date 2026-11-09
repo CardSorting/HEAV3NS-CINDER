@@ -44,6 +44,7 @@
       <div class="nav-tabs">
         <button class="tab-btn active" data-tab="tab-discover">🔍 Discover & Swipe</button>
         <button class="tab-btn" data-tab="tab-pods">💬 Pods & Channels</button>
+        <button class="tab-btn" data-tab="tab-radar">🌐 Vector Topology Radar</button>
         <button class="tab-btn" data-tab="tab-agenda">📅 Conference Agenda</button>
       </div>
     </div>
@@ -79,6 +80,10 @@
         <div class="swipe-card-container">
           <!-- Active Card -->
           <div class="swipe-card" id="swipe-card-element">
+            <!-- Dynamic Drag Stamps -->
+            <div class="swipe-stamp stamp-like" id="stamp-like">CONNECT</div>
+            <div class="swipe-stamp stamp-nope" id="stamp-nope">PASS</div>
+
             <div class="card-header-visual">
               <img id="card-avatar" class="card-avatar" src="" alt="Avatar">
               <div class="card-identity">
@@ -175,6 +180,7 @@
           <!-- Pinned Meetup Banner -->
           <div class="pinned-meetup-strip" id="pinned-meetup-bar" style="display:none;">
             <span id="pinned-meetup-text">📌 Pinned Meetup: Main Hall East Patio at 12:15 PM</span>
+            <button class="btn-rsvp-chip" id="btn-rsvp">✓ RSVP (4/5 Attending)</button>
           </div>
 
           <!-- Messages Stream -->
@@ -182,16 +188,64 @@
             <!-- Populated dynamically -->
           </div>
 
+          <!-- Real-Time Facilitator Typing Indicator -->
+          <div class="chat-typing-indicator" id="chat-typing" style="display:none;">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span style="margin-left:6px; font-size:0.75rem; color:var(--text-secondary);">CINDER AI Facilitator is coordinating schedule...</span>
+          </div>
+
           <!-- Chat Input -->
           <div class="chat-input-bar">
-            <input type="text" id="chat-input" placeholder="Type a message or ask the AI facilitator...">
+            <input type="text" id="chat-input" placeholder="Type a message or propose a meetup to the Pod...">
             <button id="chat-send-btn">Send</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- TAB 3: CONFERENCE AGENDA -->
+    <!-- TAB 3: VECTOR TOPOLOGY RADAR -->
+    <div class="tab-panel" id="tab-radar">
+      <div class="radar-view-container">
+        <div class="radar-card">
+          <div class="radar-header">
+            <div>
+              <h3 style="font-size:1.1rem; color:#fff; display:flex; align-items:center; gap:0.5rem;">
+                <span>🌐</span> Elasticsearch Dense Vector Topology (32-dim Cosine Space)
+              </h3>
+              <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
+                Interactive 2D projection of attendee embedding centroids. Distance corresponds directly to cosine affinity.
+              </p>
+            </div>
+            <div class="radar-legend">
+              <span class="legend-item"><span class="legend-dot active-dot"></span> Current Focus</span>
+              <span class="legend-item"><span class="legend-dot match-dot"></span> 89% Mutual Match</span>
+              <span class="legend-dot pod-dot"></span> Pod 07 Cluster
+            </div>
+          </div>
+          <div class="radar-canvas-wrapper">
+            <canvas id="vectorRadarCanvas" width="1180" height="520"></canvas>
+          </div>
+          <div class="radar-telemetry-bar">
+            <div class="telemetry-pill">
+              <span class="lbl">Active Vector:</span>
+              <span class="val" id="radar-active-vector">Alex Chen [0.190, 0.394, 0.501, 0.183...]</span>
+            </div>
+            <div class="telemetry-pill">
+              <span class="lbl">Target Resonance:</span>
+              <span class="val" id="radar-target-resonance">Maya Lin (Cosine Sim: 0.6146 · RRF: #1)</span>
+            </div>
+            <div class="telemetry-pill">
+              <span class="lbl">Cluster Status:</span>
+              <span class="val" style="color:var(--accent-green);">GREEN · Sub-5ms ANN Retrieval</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: CONFERENCE AGENDA -->
     <div class="tab-panel" id="tab-agenda">
       <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-lg); padding:1.5rem;">
         <h3 style="color:#fff; margin-bottom:1rem;">Cloud & AI Summit 2026 — Conference Agenda</h3>
@@ -244,6 +298,50 @@
       </div>
     </div>
   </main>
+
+  <!-- Cinematic Mutual Match Celebration Modal -->
+  <div class="match-celebration-overlay" id="match-modal">
+    <div class="match-celebration-card">
+      <div class="match-celebration-sparkles">✨ ⚡ ✨</div>
+      <div class="match-badge-glow">IT'S A MUTUAL MATCH!</div>
+      
+      <div class="match-avatars-row">
+        <div class="match-avatar-circle" id="match-user-circle">
+          <img id="match-user-img" src="" alt="User">
+          <span class="avatar-label" id="match-user-name">Alex Chen</span>
+        </div>
+        <div class="match-flame-burst">🔥</div>
+        <div class="match-avatar-circle" id="match-cand-circle">
+          <img id="match-cand-img" src="" alt="Candidate">
+          <span class="avatar-label" id="match-cand-name">Maya Lin</span>
+        </div>
+      </div>
+
+      <div class="match-affinity-pill">
+        <span class="sim-badge" id="match-affinity-score">89% HYBRID MATCH</span>
+        <span style="font-size:0.8rem; color:var(--text-secondary);">RRF Fused (BM25: 11.82 · kNN: 0.615)</span>
+      </div>
+
+      <div class="match-explanation-box">
+        <h4 style="color:#fff; font-size:0.95rem; margin-bottom:4px;" id="match-explain-head">Shared eBPF Telemetry & Autonomous Healing</h4>
+        <p style="font-size:0.85rem; color:var(--text-secondary);" id="match-explain-body">
+          Alex is building an autonomous cluster healing controller; Maya is developing zero-overhead continuous eBPF tracing probes.
+        </p>
+      </div>
+
+      <div class="match-pod-callout">
+        <div style="font-size:0.75rem; color:var(--accent-yellow); font-weight:700; text-transform:uppercase;">Intelligent Pod Formation Triggered</div>
+        <div style="font-size:0.85rem; color:#fff; margin-top:2px;">
+          Pod 07: Autonomous Cloud is staging with Jordan, Marcus & Elena!
+        </div>
+      </div>
+
+      <div class="match-actions-row">
+        <button class="btn-match-continue" id="btn-match-continue">Keep Exploring</button>
+        <button class="btn-match-jump" id="btn-match-pod">Enter Pod 07 & Chat →</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal for Story Runner -->
   <div class="modal-overlay" id="story-modal">

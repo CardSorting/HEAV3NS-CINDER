@@ -5,11 +5,15 @@ let currentAttendeeId = "att_alex_chen";
 let currentPodId = null;
 let currentCandidate = null;
 let eventSource = null;
+let allAttendees = [];
+let radarAnimationId = null;
+let radarSweepAngle = 0;
 
 document.addEventListener("DOMContentLoaded", () => {
   setupTabs();
   setupSSE();
   setupEventListeners();
+  setupSwipeCardPhysics();
   loadInitialData();
 });
 
@@ -27,6 +31,8 @@ function setupTabs() {
         loadDiscoveryFeed();
       } else if (btn.dataset.tab === "tab-pods") {
         loadPods();
+      } else if (btn.dataset.tab === "tab-radar") {
+        startRadarLoop();
       }
     });
   });
@@ -58,13 +64,19 @@ function handleRealtimeEvent(event) {
     highlightMilestone(3);
   } else if (event.type === "match.mutual") {
     highlightMilestone(2);
-    alert(`🎉 Mutual Connection with ${event.payload.fromAttendeeId === currentAttendeeId ? event.payload.toAttendeeId : event.payload.fromAttendeeId}! Both expressed interest.`);
+    // Open modern non-blocking celebration modal instead of alert
+    const cand = currentCandidate?.profile || {
+      name: event.payload.toAttendeeId,
+      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
+      company: "DataFlow Observability"
+    };
+    showMatchCelebrationModal(cand);
   }
 }
 
 function setupEventListeners() {
-  document.getElementById("btn-pass")?.addEventListener("click", () => handleSwipe("pass"));
-  document.getElementById("btn-connect")?.addEventListener("click", () => handleSwipe("like"));
+  document.getElementById("btn-pass")?.addEventListener("click", () => triggerSwipeWithAnimation("pass"));
+  document.getElementById("btn-connect")?.addEventListener("click", () => triggerSwipeWithAnimation("like"));
 
   document.getElementById("chat-send-btn")?.addEventListener("click", sendChatMessage);
   document.getElementById("chat-input")?.addEventListener("keydown", (e) => {
@@ -76,10 +88,30 @@ function setupEventListeners() {
     document.getElementById("story-modal").classList.remove("open");
   });
 
+  document.getElementById("btn-match-continue")?.addEventListener("click", () => {
+    document.getElementById("match-modal")?.classList.remove("open");
+  });
+
+  document.getElementById("btn-match-pod")?.addEventListener("click", () => {
+    document.getElementById("match-modal")?.classList.remove("open");
+    const podsTab = document.querySelector('[data-tab="tab-pods"]');
+    if (podsTab) podsTab.click();
+  });
+
+  document.getElementById("btn-rsvp")?.addEventListener("click", () => {
+    const btn = document.getElementById("btn-rsvp");
+    if (btn) {
+      btn.textContent = "✓ RSVP Confirmed (5/5 Attending)";
+      btn.style.background = "var(--accent-green)";
+      btn.style.color = "#06090d";
+    }
+  });
+
   document.getElementById("attendee-select")?.addEventListener("change", (e) => {
     currentAttendeeId = e.target.value;
     loadDiscoveryFeed();
     loadPods();
+    updateRadarTelemetry();
   });
 }
 
@@ -91,11 +123,11 @@ async function loadInitialData() {
       `ES: ${status.elasticsearch.status.toUpperCase()} (${status.elasticsearch.mode})`;
 
     const attRes = await fetch("/api/attendees");
-    const attendees = await attRes.json();
+    allAttendees = await attRes.json();
     const select = document.getElementById("attendee-select");
     if (select) {
       select.replaceChildren();
-      attendees.forEach((a) => {
+      allAttendees.forEach((a) => {
         const opt = document.createElement("option");
         opt.value = a.id;
         opt.textContent = `${a.name} (${a.title})`;
@@ -106,6 +138,7 @@ async function loadInitialData() {
 
     loadDiscoveryFeed();
     loadPods();
+    updateRadarTelemetry();
   } catch (err) {
     console.error("Failed to load initial data", err);
   }
@@ -114,66 +147,111 @@ async function loadInitialData() {
 async function loadDiscoveryFeed() {
   try {
     const res = await fetch(`/api/discovery?attendeeId=${currentAttendeeId}`);
-    const data = await res.json();
+    const feed = await res.json();
 
-    const queryBox = document.getElementById("es-query-json");
-    if (queryBox && data.esQuerySpec) {
-      queryBox.textContent = JSON.stringify(data.esQuerySpec, null, 2);
-    }
-    const scoreStats = document.getElementById("es-score-stats");
-    if (scoreStats) {
-      scoreStats.textContent = `Latency: ${data.tookMs}ms | Candidates: ${data.totalFound}`;
-    }
+    const queueContainer = document.getElementById("candidate-queue");
+    if (queueContainer) {
+      queueContainer.replaceChildren();
 
-    if (data.candidates && data.candidates.length > 0) {
-      currentCandidate = data.candidates[0];
-      renderSwipeCard(currentCandidate);
-    } else {
-      currentCandidate = null;
-      renderEmptyCard();
+      if (feed.candidates.length === 0) {
+        showNoCandidatesCard();
+        return;
+      }
+
+      currentCandidate = feed.candidates[0];
+      renderActiveCard(currentCandidate);
+
+      feed.candidates.slice(1).forEach((cand, idx) => {
+        const item = document.createElement("div");
+        item.className = "queue-item";
+        item.onclick = () => {
+          currentCandidate = cand;
+          renderActiveCard(cand);
+        };
+
+        const img = document.createElement("img");
+        img.className = "queue-avatar";
+        img.src = cand.profile.avatar;
+
+        const info = document.createElement("div");
+        info.className = "queue-info";
+
+        const h5 = document.createElement("h5");
+        h5.textContent = cand.profile.name;
+
+        const p = document.createElement("p");
+        p.textContent = `${cand.profile.title} @ ${cand.profile.company}`;
+
+        info.appendChild(h5);
+        info.appendChild(p);
+
+        const badge = document.createElement("div");
+        badge.className = "brand-badge";
+        badge.style.fontSize = "0.7rem";
+        badge.style.padding = "2px 6px";
+        badge.textContent = `${Math.round(cand.similarity * 100)}%`;
+
+        item.appendChild(img);
+        item.appendChild(info);
+        item.appendChild(badge);
+        queueContainer.appendChild(item);
+      });
     }
   } catch (err) {
-    console.error("Failed to load discovery feed", err);
+    console.error("Error loading discovery feed", err);
   }
 }
 
-function renderSwipeCard(candidateData) {
-  const p = candidateData.profile;
-  const exp = candidateData.explanation;
+function renderActiveCard(candidate) {
+  const p = candidate.profile;
+  const card = document.getElementById("swipe-card-element");
+  card.style.display = "flex";
+  card.classList.remove("card-fling-right", "card-fling-left");
+  card.style.transform = "";
+  card.style.opacity = "";
+  document.getElementById("no-candidates-card").style.display = "none";
 
   document.getElementById("card-avatar").src = p.avatar;
   document.getElementById("card-name").textContent = p.name;
   document.getElementById("card-headline").textContent = `${p.title} @ ${p.company}`;
-  document.getElementById("card-why-headline").textContent = exp.headline;
-  document.getElementById("card-why-details").textContent = exp.synergySummary;
-  document.getElementById("card-score").textContent = `${exp.scorePercent}% Match`;
+  document.getElementById("card-score").textContent = `${Math.round(candidate.similarity * 100)}% Hybrid Match`;
+
+  const why = candidate.explanation;
+  document.getElementById("card-why-headline").textContent = why.headline;
+  document.getElementById("card-why-details").textContent = why.details;
 
   const tagsContainer = document.getElementById("card-tags");
   tagsContainer.replaceChildren();
-
-  p.interests.forEach((tag) => {
-    const span = document.createElement("span");
-    span.className = "tag";
-    span.textContent = tag;
-    tagsContainer.appendChild(span);
-  });
-
-  p.expertise.forEach((tag) => {
-    const span = document.createElement("span");
-    span.className = "tag accent";
-    span.textContent = tag;
-    tagsContainer.appendChild(span);
+  p.interests.slice(0, 4).forEach((interest) => {
+    const t = document.createElement("span");
+    t.className = "tag";
+    t.textContent = interest;
+    tagsContainer.appendChild(t);
   });
 
   document.getElementById("card-projects").textContent = p.projects;
   document.getElementById("card-looking").textContent = p.looking_for;
-  document.getElementById("swipe-card-element").style.display = "flex";
-  document.getElementById("no-candidates-card").style.display = "none";
 }
 
-function renderEmptyCard() {
+function showNoCandidatesCard() {
   document.getElementById("swipe-card-element").style.display = "none";
   document.getElementById("no-candidates-card").style.display = "flex";
+}
+
+function triggerSwipeWithAnimation(action) {
+  const card = document.getElementById("swipe-card-element");
+  if (!card || !currentCandidate) return;
+
+  const flingClass = action === "like" ? "card-fling-right" : "card-fling-left";
+  const stamp = document.getElementById(action === "like" ? "stamp-like" : "stamp-nope");
+  if (stamp) stamp.style.opacity = "1";
+
+  card.classList.add(flingClass);
+
+  setTimeout(async () => {
+    if (stamp) stamp.style.opacity = "0";
+    await handleSwipe(action);
+  }, 300);
 }
 
 async function handleSwipe(action) {
@@ -192,13 +270,98 @@ async function handleSwipe(action) {
     const result = await res.json();
     if (result.isMutual) {
       highlightMilestone(2);
-      alert(`🎉 Mutual Connection with ${currentCandidate.profile.name}! Added to Pod candidate pool.`);
+      showMatchCelebrationModal(currentCandidate.profile);
     }
 
     loadDiscoveryFeed();
   } catch (err) {
     console.error("Error during swipe", err);
   }
+}
+
+function showMatchCelebrationModal(candidate) {
+  const modal = document.getElementById("match-modal");
+  if (!modal) return;
+
+  const currentUser = allAttendees.find((a) => a.id === currentAttendeeId) || {
+    name: "Alex Chen",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80"
+  };
+
+  const userImg = document.getElementById("match-user-img");
+  const candImg = document.getElementById("match-cand-img");
+  const userName = document.getElementById("match-user-name");
+  const candName = document.getElementById("match-cand-name");
+
+  if (userImg) userImg.src = currentUser.avatar;
+  if (candImg) candImg.src = candidate.avatar;
+  if (userName) userName.textContent = currentUser.name;
+  if (candName) candName.textContent = candidate.name;
+
+  modal.classList.add("open");
+}
+
+function setupSwipeCardPhysics() {
+  const card = document.getElementById("swipe-card-element");
+  const stampLike = document.getElementById("stamp-like");
+  const stampNope = document.getElementById("stamp-nope");
+  if (!card) return;
+
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let currentX = 0;
+  let currentY = 0;
+
+  card.addEventListener("pointerdown", (e) => {
+    if (e.target.tagName === "BUTTON") return;
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    card.setPointerCapture(e.pointerId);
+    card.style.transition = "none";
+  });
+
+  card.addEventListener("pointermove", (e) => {
+    if (!isDragging) return;
+    currentX = e.clientX - startX;
+    currentY = e.clientY - startY;
+    const rotate = currentX * 0.05;
+
+    card.style.transform = `translate(${currentX}px, ${currentY}px) rotate(${rotate}deg)`;
+
+    if (currentX > 0) {
+      const opacity = Math.min(1, currentX / 90);
+      if (stampLike) stampLike.style.opacity = opacity.toString();
+      if (stampNope) stampNope.style.opacity = "0";
+    } else {
+      const opacity = Math.min(1, -currentX / 90);
+      if (stampNope) stampNope.style.opacity = opacity.toString();
+      if (stampLike) stampLike.style.opacity = "0";
+    }
+  });
+
+  const onPointerUp = (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    card.releasePointerCapture(e.pointerId);
+
+    if (currentX > 110) {
+      triggerSwipeWithAnimation("like");
+    } else if (currentX < -110) {
+      triggerSwipeWithAnimation("pass");
+    } else {
+      card.style.transition = "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
+      card.style.transform = "";
+      if (stampLike) stampLike.style.opacity = "0";
+      if (stampNope) stampNope.style.opacity = "0";
+    }
+    currentX = 0;
+    currentY = 0;
+  };
+
+  card.addEventListener("pointerup", onPointerUp);
+  card.addEventListener("pointercancel", onPointerUp);
 }
 
 async function loadPods() {
@@ -329,6 +492,143 @@ async function sendChatMessage() {
   }
 }
 
+function highlightMilestone(num) {
+  for (let i = 1; i <= num; i++) {
+    const el = document.getElementById(`ms-${i}`);
+    if (el) el.classList.add("done");
+  }
+}
+
+// -------------------------------------------------------------
+// PLUS ULTRA: Vector Topology & Affinity Radar Canvas
+// -------------------------------------------------------------
+function startRadarLoop() {
+  if (radarAnimationId) cancelAnimationFrame(radarAnimationId);
+
+  const canvas = document.getElementById("vectorRadarCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  function drawFrame() {
+    radarSweepAngle += 0.025;
+    renderRadar(ctx, canvas.width, canvas.height);
+    radarAnimationId = requestAnimationFrame(drawFrame);
+  }
+
+  drawFrame();
+}
+
+function renderRadar(ctx, width, height) {
+  ctx.clearRect(0, 0, width, height);
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const maxRadius = Math.min(cx, cy) - 50;
+
+  // Concentric radar grid rings
+  const rings = [0.25, 0.5, 0.75, 1.0];
+  ctx.lineWidth = 1;
+  rings.forEach((r) => {
+    ctx.strokeStyle = "rgba(39, 51, 71, 0.6)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxRadius * r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Ring distance label
+    ctx.fillStyle = "rgba(100, 116, 139, 0.7)";
+    ctx.font = "10px monospace";
+    ctx.fillText(`cos: ${(1.0 - r * 0.8).toFixed(2)}`, cx + 6, cy - maxRadius * r + 12);
+  });
+
+  // Crosshairs
+  ctx.strokeStyle = "rgba(39, 51, 71, 0.4)";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - maxRadius);
+  ctx.lineTo(cx, cy + maxRadius);
+  ctx.moveTo(cx - maxRadius, cy);
+  ctx.lineTo(cx + maxRadius, cy);
+  ctx.stroke();
+
+  // Radar rotating sweep
+  const sweepGradient = ctx.createConicGradient(radarSweepAngle, cx, cy);
+  sweepGradient.addColorStop(0, "rgba(0, 240, 255, 0.18)");
+  sweepGradient.addColorStop(0.12, "rgba(0, 240, 255, 0.0)");
+  sweepGradient.addColorStop(1, "rgba(0, 240, 255, 0.0)");
+  ctx.fillStyle = sweepGradient;
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Project attendees in polar space relative to active attendee
+  const activeAtt = allAttendees.find((a) => a.id === currentAttendeeId) || allAttendees[0];
+
+  const nodePositions = [
+    { id: "att_alex_chen", name: "Alex Chen", role: "Platform Eng", angle: 0, dist: 0, color: "#00f0ff" },
+    { id: "att_maya_lin", name: "Maya Lin", role: "Observability", angle: 0.85, dist: 0.38, color: "#00ffaa" },
+    { id: "att_jordan_taylor", name: "Jordan Taylor", role: "AI Agents", angle: 2.2, dist: 0.58, color: "#ffb703" },
+    { id: "att_marcus_vance", name: "Marcus Vance", role: "Staff SRE", angle: 3.7, dist: 0.62, color: "#ffb703" },
+    { id: "att_elena_rostova", name: "Elena Rostova", role: "Vector DBs", angle: 5.1, dist: 0.68, color: "#ffb703" },
+  ];
+
+  // Draw connecting vector affinity lines
+  nodePositions.forEach((node) => {
+    if (node.dist > 0) {
+      const nx = cx + Math.cos(node.angle) * (maxRadius * node.dist);
+      const ny = cy + Math.sin(node.angle) * (maxRadius * node.dist);
+
+      ctx.strokeStyle = node.id === "att_maya_lin" ? "rgba(0, 255, 170, 0.5)" : "rgba(255, 183, 3, 0.25)";
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = node.id === "att_maya_lin" ? 2 : 1;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(nx, ny);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  });
+
+  // Draw nodes
+  nodePositions.forEach((node) => {
+    const nx = cx + Math.cos(node.angle) * (maxRadius * node.dist);
+    const ny = cy + Math.sin(node.angle) * (maxRadius * node.dist);
+
+    // Glowing halo
+    const halo = ctx.createRadialGradient(nx, ny, 2, nx, ny, 16);
+    halo.addColorStop(0, node.color);
+    halo.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(nx, ny, 16, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Solid node center
+    ctx.fillStyle = node.color;
+    ctx.beginPath();
+    ctx.arc(nx, ny, node.dist === 0 ? 8 : 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Node label
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillText(node.name, nx + 12, ny - 2);
+
+    ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+    ctx.font = "9px sans-serif";
+    ctx.fillText(node.role, nx + 12, ny + 10);
+  });
+}
+
+function updateRadarTelemetry() {
+  const activeAtt = allAttendees.find((a) => a.id === currentAttendeeId);
+  const activeEl = document.getElementById("radar-active-vector");
+  if (activeEl && activeAtt) {
+    activeEl.textContent = `${activeAtt.name} [0.190, 0.394, 0.501, 0.183...]`;
+  }
+}
+
+// -------------------------------------------------------------
+// Automated 10-Step Story Modal
+// -------------------------------------------------------------
 async function runStoryModal() {
   const modal = document.getElementById("story-modal");
   const stepper = document.getElementById("story-stepper");
@@ -374,12 +674,12 @@ async function runStoryModal() {
         if (step.step === 5) highlightMilestone(3);
         if (step.step >= 6 && step.step <= 8) highlightMilestone(4);
         if (step.step >= 9) highlightMilestone(5);
-      }, idx * 250);
+      }, idx * 220);
     });
 
     setTimeout(() => {
       loadInitialData();
-    }, data.steps.length * 250 + 300);
+    }, data.steps.length * 220 + 300);
   } catch (err) {
     console.error("Error running story", err);
     const errP = document.createElement("p");
@@ -389,308 +689,32 @@ async function runStoryModal() {
   }
 }
 
-function makeEl(tag, text = "", styleObj = {}, className = "") {
-  const el = document.createElement(tag);
-  if (text) el.textContent = text;
-  if (className) el.className = className;
-  for (const [k, v] of Object.entries(styleObj)) {
-    el.style[k] = v;
-  }
-  return el;
-}
-
 function formatStepCardContent(step) {
-  const container = makeEl("div", "", {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.5rem"
-  });
-
-  const d = step.details;
+  const container = document.createElement("div");
+  container.style.fontSize = "0.78rem";
+  container.style.lineHeight = "1.4";
 
   if (step.step === 1) {
-    const list = makeEl("div", "", { display: "flex", flexDirection: "column", gap: "4px" });
-    d.attendees.forEach((a) => {
-      const row = makeEl("div", "", { fontSize: "0.78rem", color: "var(--text-secondary)" });
-      const nameStrong = makeEl("strong", a.name, { color: "#fff" });
-      const roleSpan = makeEl("span", ` • ${a.title} @ `);
-      const compSpan = makeEl("span", a.company, { color: "var(--accent-cyan)" });
-      row.append(nameStrong, roleSpan, compSpan);
-      list.appendChild(row);
-    });
-    container.appendChild(list);
+    container.textContent = `Registered ${step.details.attendeeCount} attendees into Elasticsearch cinder_attendees.`;
   } else if (step.step === 2) {
-    const box = makeEl("div", "", {
-      background: "rgba(0,240,255,0.05)",
-      border: "1px solid rgba(0,240,255,0.2)",
-      borderRadius: "6px",
-      padding: "8px",
-      fontSize: "0.75rem"
-    });
-    const header = makeEl("div", "Elasticsearch Schema Mappings & Index Breakdown", {
-      color: "var(--accent-cyan)",
-      fontWeight: "700",
-      marginBottom: "4px"
-    });
-    const idxLine = makeEl("div", `Index: ${d.indexName} (${d.clusterStatus.toUpperCase()} • ${d.mode})`);
-    const vecLine = makeEl("div", "Vector: dense_vector(dims=32, similarity=cosine)");
-    const txtLine = makeEl("div", `Text Fields: ${d.mappings.textFields.join(", ")}`);
-    const samples = makeEl("div", "", { marginTop: "6px", color: "var(--text-muted)", fontSize: "0.72rem" });
-    d.indexedProfiles.forEach((p) => {
-      const pLine = makeEl("div", `${p.name}: ${p.tokenCount} tokens, vector[32]=[${p.vectorSample.join(", ")}...]`);
-      samples.appendChild(pLine);
-    });
-    box.append(header, idxLine, vecLine, txtLine, samples);
-    container.appendChild(box);
+    container.textContent = `Cluster: GREEN (${step.details.mode}) | 32-dim dense_vector cosine similarity.`;
   } else if (step.step === 3) {
-    const box = makeEl("div", "", {
-      background: "rgba(0,255,170,0.06)",
-      border: "1px solid rgba(0,255,170,0.25)",
-      borderRadius: "6px",
-      padding: "8px",
-      fontSize: "0.78rem"
-    });
-    const candTitle = makeEl("div", `★ Top Candidate: ${d.topCandidate} (${d.candidatesCount} found in ${d.tookMs}ms)`, {
-      fontWeight: "700",
-      color: "var(--accent-green)",
-      marginBottom: "2px"
-    });
-    const headline = makeEl("div", d.relevanceExplanation.headline, {
-      color: "#fff",
-      fontSize: "0.8rem",
-      marginTop: "2px"
-    });
-    const synergy = makeEl("div", d.relevanceExplanation.synergySummary, {
-      color: "var(--text-secondary)",
-      fontSize: "0.74rem",
-      marginTop: "2px"
-    });
-    box.append(candTitle, headline, synergy);
-    container.appendChild(box);
+    container.textContent = `Top Hybrid Match: ${step.details.topMatch.name} (RRF: ${step.details.topMatch.rrfScore.toFixed(4)}).`;
   } else if (step.step === 4) {
-    const box = makeEl("div", "", {
-      background: "rgba(240,0,255,0.08)",
-      border: "1px solid rgba(240,0,255,0.3)",
-      borderRadius: "6px",
-      padding: "8px",
-      fontSize: "0.8rem"
-    });
-    const matchHead = makeEl("div", "⚡ Mutual Connection Established!", {
-      fontWeight: "700",
-      color: "var(--accent-magenta)"
-    });
-    const matchPair = makeEl("div", `${d.initiator} ⇄ ${d.partner}`, {
-      color: "#fff",
-      fontWeight: "600",
-      marginTop: "2px"
-    });
-    const matchId = makeEl("div", `Match ID: ${d.matchId} • Added to Pod candidate pool`, {
-      fontSize: "0.72rem",
-      color: "var(--text-muted)"
-    });
-    box.append(matchHead, matchPair, matchId);
-    container.appendChild(box);
+    container.textContent = `Mutual Match: ${step.details.from} ⚡ ${step.details.to}. Added to Pod pool.`;
   } else if (step.step === 5) {
-    const box = makeEl("div", "", {
-      background: "rgba(255,183,3,0.08)",
-      border: "1px solid rgba(255,183,3,0.3)",
-      borderRadius: "6px",
-      padding: "8px",
-      fontSize: "0.78rem"
-    });
-    const title = makeEl("div", `Pod Formed: ${d.podName} (${d.memberCount} Members)`, {
-      fontWeight: "700",
-      color: "var(--accent-yellow)"
-    });
-    const topic = makeEl("div", `Topic: ${d.topic}`, {
-      color: "var(--text-secondary)",
-      fontSize: "0.74rem"
-    });
-    const rankHeader = makeEl("div", "Elasticsearch Hybrid Member Rankings:", {
-      marginTop: "6px",
-      fontSize: "0.72rem",
-      color: "var(--accent-cyan)"
-    });
-    const rankRow = makeEl("div", "", { marginTop: "2px" });
-    (d.candidateRankings || []).forEach((r, i) => {
-      const chip = makeEl("span", `#${i + 1} ${r.name} (RRF: ${r.rrfScore}) `, {
-        display: "inline-block",
-        marginRight: "8px",
-        fontSize: "0.72rem",
-        color: "var(--text-secondary)"
-      });
-      rankRow.appendChild(chip);
-    });
-    box.append(title, topic, rankHeader, rankRow);
-    container.appendChild(box);
+    container.textContent = `Formed Pod 07: ${step.details.podName} with ${step.details.memberCount} members.`;
   } else if (step.step === 6) {
-    const box = makeEl("div", "", {
-      background: "rgba(0,240,255,0.06)",
-      border: "1px solid rgba(0,240,255,0.25)",
-      borderRadius: "6px",
-      padding: "8px",
-      fontSize: "0.78rem"
-    });
-    const chLine = makeEl("div", `Channel Active: ${d.channel} (${d.status})`, {
-      color: "var(--accent-cyan)",
-      fontWeight: "700"
-    });
-    const facLine = makeEl("div", `Assigned Facilitator: ${d.facilitatorName}`, {
-      color: "var(--text-secondary)",
-      fontSize: "0.74rem",
-      marginTop: "2px"
-    });
-    const feats = makeEl("div", d.capabilities.join(" • "), {
-      fontSize: "0.72rem",
-      color: "var(--text-muted)",
-      marginTop: "4px"
-    });
-    box.append(chLine, facLine, feats);
-    container.appendChild(box);
+    container.textContent = `Provisioned private space: ${step.details.channel} with live SSE broadcast.`;
   } else if (step.step === 7) {
-    const box = makeEl("div", "", { fontSize: "0.78rem" });
-    const facBox = makeEl("div", "", {
-      background: "rgba(240,0,255,0.08)",
-      borderLeft: "3px solid var(--accent-magenta)",
-      padding: "6px 10px",
-      borderRadius: "4px",
-      marginBottom: "6px"
-    });
-    const facTag = makeEl("span", "[AI FACILITATOR]", {
-      fontSize: "0.7rem",
-      fontWeight: "700",
-      color: "var(--accent-magenta)"
-    });
-    const facText = makeEl("div", d.welcomeMessage, {
-      color: "var(--text-primary)",
-      fontSize: "0.75rem",
-      whiteSpace: "pre-wrap",
-      marginTop: "2px"
-    });
-    facBox.append(facTag, facText);
-    box.appendChild(facBox);
-
-    d.dialogue.forEach((msg) => {
-      const row = makeEl("div", "", {
-        padding: "4px 0",
-        fontSize: "0.75rem",
-        color: "var(--text-secondary)"
-      });
-      const sender = makeEl("strong", `${msg.from}: `, { color: "var(--accent-cyan)" });
-      const text = document.createTextNode(msg.text);
-      row.append(sender, text);
-      box.appendChild(row);
-    });
-    container.appendChild(box);
+    container.textContent = `AI Facilitator welcomed group with technical icebreaker. Introductions started.`;
   } else if (step.step === 8) {
-    const box = makeEl("div", "", {
-      background: "rgba(0,255,170,0.06)",
-      border: "1px solid rgba(0,255,170,0.25)",
-      borderRadius: "6px",
-      padding: "8px",
-      fontSize: "0.78rem"
-    });
-    const propHeader = makeEl("div", `MEETUP PROPOSAL BY ${d.sender.toUpperCase()}`, {
-      fontSize: "0.72rem",
-      color: "var(--accent-green)",
-      fontWeight: "700",
-      marginBottom: "2px"
-    });
-    const propMsg = makeEl("div", `"${d.proposalMessage}"`, {
-      color: "#fff",
-      fontSize: "0.8rem"
-    });
-    const propLoc = makeEl("div", `📍 Proposed: ${d.proposedLocation} at ${d.proposedTime}`, {
-      marginTop: "4px",
-      fontSize: "0.72rem",
-      color: "var(--accent-cyan)"
-    });
-    box.append(propHeader, propMsg, propLoc);
-    container.appendChild(box);
+    container.textContent = `Marcus Vance proposed meetup: ${step.details.location} at ${step.details.time}.`;
   } else if (step.step === 9) {
-    const box = makeEl("div", "", {
-      background: "rgba(255,183,3,0.1)",
-      border: "1px solid var(--accent-yellow)",
-      borderRadius: "6px",
-      padding: "8px",
-      fontSize: "0.78rem"
-    });
-    const pinTitle = makeEl("div", `📌 PINNED MEETUP: ${d.pinnedLocation} at ${d.meetupTime} [${d.status}]`, {
-      color: "var(--accent-yellow)",
-      fontWeight: "700"
-    });
-    const confText = makeEl("div", d.facilitatorConfirmation, {
-      color: "var(--text-secondary)",
-      fontSize: "0.75rem",
-      marginTop: "4px"
-    });
-    box.append(pinTitle, confText);
-    container.appendChild(box);
+    container.textContent = `📍 AI Facilitator verified schedule & pinned meetup: ${step.details.pinned.location} at ${step.details.pinned.time}.`;
   } else if (step.step === 10) {
-    const box = makeEl("div", "", { fontSize: "0.78rem" });
-    const agBox = makeEl("div", "", {
-      background: "rgba(0,240,255,0.06)",
-      border: "1px solid rgba(0,240,255,0.25)",
-      borderRadius: "6px",
-      padding: "8px",
-      marginBottom: "6px"
-    });
-    const agTag = makeEl("div", "AGENDA NOTIFICATION", {
-      fontSize: "0.7rem",
-      fontWeight: "700",
-      color: "var(--accent-cyan)"
-    });
-    const agText = makeEl("div", d.agendaAnnouncement, {
-      color: "#fff",
-      fontSize: "0.75rem",
-      marginTop: "2px"
-    });
-    agBox.append(agTag, agText);
-
-    const prBox = makeEl("div", "", {
-      background: "rgba(240,0,255,0.06)",
-      border: "1px solid rgba(240,0,255,0.25)",
-      borderRadius: "6px",
-      padding: "8px"
-    });
-    const prTag = makeEl("div", "FACILITATOR DISCUSSION PROMPT", {
-      fontSize: "0.7rem",
-      fontWeight: "700",
-      color: "var(--accent-magenta)"
-    });
-    const prText = makeEl("div", d.discussionPrompt, {
-      color: "#fff",
-      fontSize: "0.75rem",
-      marginTop: "2px"
-    });
-    prBox.append(prTag, prText);
-
-    box.append(agBox, prBox);
-    container.appendChild(box);
+    container.textContent = `Session Alert: "${step.details.highlightSession.title}" starts at ${step.details.highlightSession.time}.`;
   }
 
-  const detailsEl = document.createElement("details");
-  detailsEl.style.marginTop = "4px";
-  const summaryEl = document.createElement("summary");
-  summaryEl.style.cursor = "pointer";
-  summaryEl.style.fontSize = "0.7rem";
-  summaryEl.style.color = "var(--text-muted)";
-  summaryEl.textContent = "View Raw Step Payload (JSON)";
-  const pre = document.createElement("pre");
-  pre.style.fontSize = "0.7rem";
-  pre.style.whiteSpace = "pre-wrap";
-  pre.style.marginTop = "4px";
-  pre.style.color = "var(--text-secondary)";
-  pre.textContent = JSON.stringify(d, null, 2);
-  detailsEl.appendChild(summaryEl);
-  detailsEl.appendChild(pre);
-
-  container.appendChild(detailsEl);
   return container;
-}
-
-function highlightMilestone(num) {
-  for (let i = 1; i <= num; i++) {
-    document.getElementById(`ms-${i}`)?.classList.add("done");
-  }
 }
