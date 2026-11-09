@@ -21,7 +21,7 @@
 [x] Implement an Elasticsearch AttendeeRepository on cinder-registrations that adds eventId, personId and role, drops the 32-dim embedding, and filters every query by eventId
 [x] Write registrations with refresh wait_for so a checked-in attendee is immediately discoverable and embedded by the cinder-embed-registration pipeline
 [x] Implement an Elasticsearch InteractionRepository on cinder-interactions for swipes and mutual matches scoped by eventId
-[ ] Implement an Elasticsearch MessageRepository on cinder-messages storing pod messages with channel pod and direct messages with channel direct and matchId
+[x] Implement an Elasticsearch MessageRepository on cinder-messages storing pod messages with channel pod and direct messages with channel direct and matchId
 [ ] Implement an Elasticsearch PodRepository on cinder-pods that stores pods without embedded messages and loads messages through the MessageRepository
 [ ] Implement Elasticsearch AgendaRepository, SpaceRepository, AnnouncementRepository and PromptRepository using the from_session and from_space mappings in elasticsearch/cinder/compat_check.py
 [ ] Add unit tests for every Elasticsearch repository with a mocked client, including the strict-mapping adapter transforms
