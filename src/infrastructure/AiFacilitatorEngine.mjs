@@ -19,7 +19,7 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
    * @param {import("../domain/pod.mjs").Pod} pod
    * @param {import("../domain/attendee.mjs").Attendee[]} members
    */
-  async generateWelcomeIntro(pod, members) {
+  async generateWelcomeIntro(pod, members, { nextSocial = null } = {}) {
     const memberNames = members.map((m) => m.name).join(", ");
     const topics = Array.from(new Set(members.flatMap((m) => m.interests))).slice(0, 4);
 
@@ -27,7 +27,9 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
       `👋 Welcome to ${pod.name}!\n\n` +
       `You have been curated together around ${topics.join(", ")}.\n\n` +
       `Members in this Pod: ${memberNames}.\n\n` +
-      `📅 Upcoming Schedule: Curated Lunch Meetup begins at 12:15 PM.\n` +
+      (nextSocial
+        ? `📅 Up next: ${nextSocial.title} at ${nextSocial.time}${nextSocial.room ? ` in ${nextSocial.room}` : ""}.\n`
+        : `📅 Check the agenda for the next break to meet in person.\n`) +
       `Before we head over, take a moment to introduce the core problem you're currently tackling!`;
 
     const suggestedStarters = [
@@ -47,7 +49,7 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
    * @param {import("../domain/pod.mjs").Pod} _pod
    * @param {string} text
    */
-  async evaluateMeetupIntent(_pod, text, { spaces = [], when = null } = {}) {
+  async evaluateMeetupIntent(_pod, text, { spaces = [], when = null, defaultPlace = null } = {}) {
     const lower = text.toLowerCase();
 
     // The most specific space the message names, matched on the space's name and aliases
@@ -69,21 +71,25 @@ export class AiFacilitatorEngine extends IAiFacilitatorService {
       return { isMeetupProposal: false };
     }
 
-    const detectedLocation = mentioned ? mentioned.name : "Main Hall East Patio";
+    // No place named: the room of the slot the meetup falls in, else a meetup-friendly space (chosen by core).
+    const place = mentioned || defaultPlace || null;
+    const detectedLocation = place ? place.name : null;
 
-    const time = when?.time || "12:15 PM";
+    const time = when?.time || null;
     const soon = Number.isFinite(when?.minutesUntil) && when.minutesUntil > 0 && when.minutesUntil <= 120
       ? ` It starts in ${Math.round(when.minutesUntil)} minutes.`
       : "";
     const slot = when?.slotTitle ? ` (${when.slotTitle})` : "";
-    const confirmationMessage =
-      `📍 Meetup Confirmed: ${detectedLocation} at ${time}${slot}.\n` +
-      `I've pinned this to your Pod header.${soon}`;
+    const confirmationMessage = !detectedLocation
+      ? "📍 Where should we meet? Name a spot (for example a café or lounge) and I'll pin it."
+      : time
+        ? `📍 Meetup Confirmed: ${detectedLocation} at ${time}${slot}.\nI've pinned this to your Pod header.${soon}`
+        : `📍 Meetup spot pinned: ${detectedLocation}. There are no more breaks on today's agenda, so agree on a time here.`;
 
     return {
       isMeetupProposal: true,
       location: detectedLocation,
-      spaceId: mentioned ? mentioned.id : null,
+      spaceId: place ? place.id : null,
       time,
       confirmationMessage
     };

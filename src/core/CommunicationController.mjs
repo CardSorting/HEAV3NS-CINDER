@@ -5,6 +5,8 @@ import { generatePrefixedId } from "../plumbing/idGenerator.mjs";
 import { requestError } from "../plumbing/requestError.mjs";
 import { resolveMeetupTime } from "../domain/meetupTime.mjs";
 
+const TIME_TO_BE_AGREED = "time to be agreed";
+
 /**
  * Controller for Milestone 4: Realtime Pod Communication & Meetup Coordination.
  */
@@ -92,11 +94,15 @@ export class CommunicationController {
       // All of the venue's spaces: people name rooms as landmarks ("meet outside room 2.04").
       const spaces = this.spaceRepo && eventId ? await this.spaceRepo.listForEvent(eventId) : [];
       let meetupIntent = await this.facilitatorService.evaluateMeetupIntent(pod, content, { spaces });
+      // Only proposals pay for the agenda lookup: resolve the time and default place, then let the facilitator word it.
+      const when = meetupIntent.isMeetupProposal ? await this.resolveWhen(eventId, content) : null;
+      if (meetupIntent.isMeetupProposal) {
+        meetupIntent = await this.facilitatorService.evaluateMeetupIntent(pod, content, {
+          spaces, when, defaultPlace: defaultPlace(spaces, when)
+        });
+      }
       if (meetupIntent.isMeetupProposal && meetupIntent.location) {
-        // Only proposals pay for the agenda lookup: resolve the time, then let the facilitator word it.
-        const when = await this.resolveWhen(eventId, content);
-        if (when) meetupIntent = await this.facilitatorService.evaluateMeetupIntent(pod, content, { spaces, when });
-        pod.pinMeetup(meetupIntent.location, when?.time || meetupIntent.time || "12:15 PM", true, {
+        pod.pinMeetup(meetupIntent.location, when?.time || TIME_TO_BE_AGREED, true, {
           spaceId: meetupIntent.spaceId || null,
           startsAt: when?.startsAt || null
         });
@@ -141,17 +147,30 @@ export class CommunicationController {
    * @param {Object} params
    * @param {string} params.podId
    * @param {string} params.senderId - must be a member of the Pod
-   * @param {string} [params.location="Main Hall East Patio"]
-   * @param {string} [params.time="12:15 PM"]
+   * @param {string} [params.location] - defaults to the room of the next break/lunch, else a meetup-friendly space
+   * @param {string} [params.time] - e.g. "12:30 PM"; defaults to the next break/lunch on the agenda
    * @param {string} [params.note] - custom proposal text
    * @returns {Promise<{ location: string, time: string, confirmed: boolean, rsvps: string[] }>}
    */
-  async proposeMeetup({ podId, senderId, location = "Main Hall East Patio", time = "12:15 PM", note }) {
+  async proposeMeetup({ podId, senderId, location, time, note }) {
     const memberPod = await this.requireMember(podId, senderId);
-    await this.sendMessage({ podId, senderId, content: note || `Let's meet at ${location} at ${time} to collaborate!` });
+    const eventId = memberPod.eventId || this.defaultEventId;
+    const when = await this.resolveWhen(eventId, time || "");
+    let place = location || null;
+    let spaceId = null;
+    const spaces = this.spaceRepo && eventId ? await this.spaceRepo.listForEvent(eventId) : [];
+    if (place) {
+      spaceId = spaces.find((s) => s.name.toLowerCase() === place.toLowerCase())?.id || null;
+    } else {
+      const fallback = defaultPlace(spaces, when);
+      place = fallback?.name || null;
+      spaceId = fallback?.id || null;
+    }
+    if (!place) throw requestError("NO_MEETUP_PLACE", 400, "No meetup location given and the event has no meetup spaces");
+    const displayTime = when?.time || time || TIME_TO_BE_AGREED;
+    await this.sendMessage({ podId, senderId, content: note || `Let's meet at ${place} at ${displayTime} to collaborate!` });
     const pod = await this.podRepo.findById(podId);
-    const when = await this.resolveWhen(memberPod.eventId || this.defaultEventId, time);
-    pod.pinMeetup(location, when?.time || time, true, { startsAt: when?.startsAt || null });
+    pod.pinMeetup(place, displayTime, true, { spaceId, startsAt: when?.startsAt || null });
     pod.pinnedMeetup.rsvps = [senderId];
     await this.podRepo.save(pod);
     this.eventBus.publish("meetup.pinned", { podId, location, time, rsvps: pod.pinnedMeetup.rsvps, eventId: pod.eventId });
@@ -191,7 +210,8 @@ export class CommunicationController {
       time: resolved.time,
       startsAt: resolved.startsAt,
       minutesUntil: (Date.parse(resolved.startsAt) - nowMs) / 60000,
-      slotTitle: resolved.slot?.title || null
+      slotTitle: resolved.slot?.title || null,
+      slotSpaceId: resolved.slot?.spaceId || null
     };
   }
 
@@ -258,3 +278,13 @@ export class CommunicationController {
   }
 }
 
+/**
+ * Where to meet when nobody named a place: the room of the slot the meetup falls in (e.g. lunch in the
+ * Exhibit Hall), else the first meetup-friendly space, else any space.
+ */
+function defaultPlace(spaces, when) {
+  return spaces.find((s) => when?.slotSpaceId && s.id === when.slotSpaceId)
+    || spaces.find((s) => s.meetupFriendly)
+    || spaces[0]
+    || null;
+}

@@ -155,7 +155,8 @@ export class CinderApp {
       esClient: this.esClient,
       eventBus: this.eventBus,
       facilitatorService: this.facilitatorService,
-      interactionRepo: this.interactionRepo
+      interactionRepo: this.interactionRepo,
+      nextSocialSlot: (eventId) => this.facilitatorCtrl.nextSocialSlot(eventId)
     });
 
     this.commCtrl = new CommunicationController({

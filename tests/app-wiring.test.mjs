@@ -119,6 +119,7 @@ describe("CinderApp composition root", () => {
     app.attendeeRepo.findById = async (id) => ({ id, name: id, eventId: DEMO, interests: ["Kubernetes"], topics: [], expertise: [], embedding: vectors[id] || [], toJSON() { return { id }; } });
     app.attendeeRepo.listAll = async () => [];
     app.interactionRepo.listMutualMatches = async () => [];
+    app.agendaRepo.findNextSocialSlot = async () => null;
     app.podRepo.save = async () => {};
     const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_a", "att_b"], theme: "Platform", targetSize: 3 });
     assert.strictEqual(sent[0].eventId, DEMO);
@@ -194,5 +195,34 @@ describe("CinderApp composition root", () => {
     after = await app.podRepo.findById(pod.id);
     assert.strictEqual(after.pinnedMeetup.startsAt, "2026-12-23T12:50:00-07:00");
     assert.strictEqual(after.pinnedMeetup.location, "Tech Cafe (Booth 4)");
+  });
+
+  it("uses agenda and space lookups instead of hard-coded meetup defaults", async () => {
+    const app = new CinderApp({ clock });   // demo clock 11:45 local on the seed event day
+    await app.initialize();
+    const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 4 });
+    const welcome = await app.facilitatorCtrl.welcomePod(pod.id);
+    assert.match(welcome.content, /Up next: Curated Pod Networking & Lunch Meetup at 12:15 PM in Main Hall East Patio \/ Tech Cafe\./);
+
+    // No place named: the slot's room is not a seed space, so the first meetup-friendly space is used.
+    await app.commCtrl.sendMessage({ podId: pod.id, senderId: "att_alex_chen", content: "Shall we meet for lunch?" });
+    let pinned = (await app.podRepo.findById(pod.id)).pinnedMeetup;
+    assert.strictEqual(pinned.location, "Main Hall East Patio");
+    assert.strictEqual(pinned.spaceId, "loc_east_patio");
+    assert.strictEqual(pinned.time, "12:15 PM");
+
+    // API proposal without location/time: next slot + default place.
+    const viaApi = await app.commCtrl.proposeMeetup({ podId: pod.id, senderId: "att_maya_lin" });
+    assert.strictEqual(viaApi.time, "12:15 PM");
+    assert.strictEqual(viaApi.startsAt, "2026-12-23T12:15:00-07:00");
+
+    // After the last break of the day there is no slot: the spot is pinned with the time left open.
+    const late = new CinderApp({ clock: createClock({ demoTime: "2026-12-23T16:00:00-07:00", frozen: true }) });
+    await late.initialize();
+    const latePod = await late.podCtrl.composePod({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 3 });
+    await late.commCtrl.sendMessage({ podId: latePod.id, senderId: "att_alex_chen", content: "meet at the tech cafe?" });
+    const lateAfter = await late.podRepo.findById(latePod.id);
+    assert.strictEqual(lateAfter.pinnedMeetup.time, "time to be agreed");
+    assert.match(lateAfter.messages.at(-1).content, /no more breaks on today's agenda/);
   });
 });

@@ -22,8 +22,10 @@ export class PodOrchestrationController {
    * @param {import("../domain/interfaces/IInteractionRepository.mjs").IInteractionRepository} [params.interactionRepo]
    *   mutual matches of the seeds are added as anchors when available
    */
-  constructor({ podRepo, attendeeRepo, esClient, eventBus, facilitatorService, interactionRepo = null }) {
+  constructor({ podRepo, attendeeRepo, esClient, eventBus, facilitatorService, interactionRepo = null, nextSocialSlot = null }) {
     this.interactionRepo = interactionRepo;
+    /** @type {((eventId: string) => Promise<Object|null>) | null} next break/lunch for the welcome intro */
+    this.nextSocialSlot = nextSocialSlot;
     this.podRepo = podRepo;
     this.attendeeRepo = attendeeRepo;
     this.esClient = esClient;
@@ -177,7 +179,9 @@ export class PodOrchestrationController {
     await this.podRepo.save(pod);
 
     // Trigger AI Facilitator to generate welcoming intro
-    const welcomeIntro = await this.facilitatorService.generateWelcomeIntro(pod, memberEntities);
+    const welcomeIntro = await this.facilitatorService.generateWelcomeIntro(pod, memberEntities, {
+      nextSocial: this.nextSocialSlot ? await this.nextSocialSlot(pod.eventId) : null
+    });
 
     this.eventBus.publish("pod.formed", {
       pod: pod.toJSON(),

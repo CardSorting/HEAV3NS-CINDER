@@ -10,9 +10,11 @@ export class IAiFacilitatorService {
    * Generates a context-aware welcome and introduction for a newly formed Pod.
    * @param {import("../pod.mjs").Pod} _pod
    * @param {import("../attendee.mjs").Attendee[]} _members
+   * @param {Object} [_context]
+   * @param {{ title: string, time: string, room: string|null }|null} [_context.nextSocial] - next break/lunch from the agenda
    * @returns {Promise<{ content: string, suggestedStarters: string[] }>}
    */
-  async generateWelcomeIntro(_pod, _members) {
+  async generateWelcomeIntro(_pod, _members, _context) {
     throw new Error("IAiFacilitatorService.generateWelcomeIntro must be implemented by an infrastructure adapter.");
   }
 
@@ -24,6 +26,7 @@ export class IAiFacilitatorService {
    * @param {import("../venueSpace.mjs").VenueSpace[]} [_context.spaces] - meetup spaces available at the Pod's event
    * @param {{ time: string, startsAt: string, minutesUntil?: number, slotTitle?: string }} [_context.when]
    *   meetup time resolved against the agenda (used in the confirmation)
+   * @param {{ id: string, name: string }|null} [_context.defaultPlace] - place to use when the message names none
    * @returns {Promise<{ isMeetupProposal: boolean, location?: string, spaceId?: string|null, time?: string, confirmationMessage?: string }>}
    */
   async evaluateMeetupIntent(_pod, _text, _context) {

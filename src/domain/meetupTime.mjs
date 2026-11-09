@@ -51,6 +51,22 @@ export function resolveMeetupTime({ text = "", sessions, nowMs, timezone }) {
 }
 
 /**
+ * Short description of an agenda slot for facilitator messages.
+ * @param {{ title: string, startDate: string, timezone?: string|null, room?: string, spaceId?: string|null }} session
+ * @param {string} [timezone]
+ * @returns {{ title: string, time: string, room: string|null, spaceId: string|null, startsAt: string }}
+ */
+export function slotSummary(session, timezone) {
+  return {
+    title: session.title,
+    time: formatLocalTime(session.startDate, timezone || session.timezone || "UTC"),
+    room: session.room || null,
+    spaceId: session.spaceId || null,
+    startsAt: session.startDate
+  };
+}
+
+/**
  * Finds a clock time in free text: "12:30", "12:30pm", "1 pm", "1pm". Bare numbers ("room 204", "2.04")
  * are ignored. Hours 1–7 without am/pm are read as afternoon (conference hours).
  * @returns {{ hours: number, minutes: number } | null}

@@ -3,6 +3,7 @@
 import { Message } from "../domain/message.mjs";
 import { generatePrefixedId } from "../plumbing/idGenerator.mjs";
 import { CONTENT_SESSION_TYPES } from "../plumbing/sessionTypes.mjs";
+import { slotSummary } from "../domain/meetupTime.mjs";
 
 /**
  * Controller for Milestone 5: Proactive AI Facilitator.
@@ -55,6 +56,13 @@ export class FacilitatorController {
     };
   }
 
+  /** The next break/lunch/networking slot by the clock, summarized for facilitator messages. */
+  async nextSocialSlot(eventId) {
+    if (!eventId) return null;
+    const slot = await this.agendaRepo.findNextSocialSlot(eventId, this.clock.nowMs());
+    return slot ? slotSummary(slot.toJSON()) : null;
+  }
+
   /** Next discussion prompt (rotates through the deep-dive prompts). */
   async nextPrompt() {
     const prompts = await this.promptRepo.listByPhase("deep-dive");
@@ -90,7 +98,9 @@ export class FacilitatorController {
       if (att) members.push(att);
     }
 
-    const intro = await this.facilitatorService.generateWelcomeIntro(pod, members);
+    const intro = await this.facilitatorService.generateWelcomeIntro(pod, members, {
+      nextSocial: await this.nextSocialSlot(pod.eventId || this.defaultEventId)
+    });
 
     const message = new Message({
       id: generatePrefixedId("msg_welcome"),
