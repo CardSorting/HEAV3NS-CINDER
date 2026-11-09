@@ -8,7 +8,9 @@
     "start": "node bin/server.mjs",
     "demo": "node bin/demo.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node /Users/bozoegg/Desktop/HEAV3NS-JOY/bin/joy-check.mjs ."
+    "check": "node /Users/bozoegg/Desktop/HEAV3NS-JOY/bin/joy-check.mjs .",
+    "docs:check": "node bin/docs-check.mjs .",
+    "verify": "npm test && npm run check && npm run docs:check"
   },
   "keywords": [
     "cinder",

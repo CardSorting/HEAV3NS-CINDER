@@ -1,0 +1,39 @@
+# CINDER — LLMs System Context & Navigation Map
+
+> CINDER is an intelligent, agent-facilitated social coordination platform that transforms how attendees discover, meet, communicate, and participate in conferences.
+> Architecture: Joyzoning Sovereign Architecture (DOMAIN, CORE, INFRASTRUCTURE, PLUMBING, UI). Zero external npm dependencies.
+> Retrieval: Elasticsearch Hybrid Search (BM25 keyword + 32-dim dense vector kNN cosine similarity + Reciprocal Rank Fusion).
+
+## Quick Reference
+- Root Directory: /Users/bozoegg/Desktop/elasticsearch
+- Package Name: cinder-conference (v1.0.0, Node ESM)
+- Entry Points:
+  - CLI Router: bin/cinder.mjs
+  - Demo Scenario: bin/demo.mjs
+  - HTTP Server: bin/server.mjs
+  - Composition Root: src/core/CinderApp.mjs
+- Test Runner: node --test tests/*.test.mjs
+- Architecture Check: node /Users/bozoegg/Desktop/HEAV3NS-JOY/bin/joy-check.mjs .
+
+## Documentation Map
+- Getting Started: docs/GETTING_STARTED.md (10-minute onboarding tutorial)
+- Documentation Hub: docs/README.md (Complete Diataxis index and audience paths)
+- Documentation Guide: docs/DOCS_GUIDE.md (Standards and verification rules)
+- System Architecture: docs/architecture/current.md (5-zone layout and data flows)
+- Project Map: docs/PROJECT_MAP.md (1-to-1 directory and file directory)
+- Code To Doc Map: docs/CODE_TO_DOC_MAP.md (Source file to doc page mapping)
+- Codebase Standards: docs/CODEBASE_STANDARDS.md (Joyzoning, ESM, error conventions)
+- Constitution: docs/CONSTITUTION.md (The 6 immutable laws of CINDER)
+- Agent Stack: docs/AGENT_STACK.md (AI Facilitator architecture, prompt contracts, and event lifecycle)
+- CI Integration: docs/CI_INTEGRATION.md (Automated test execution and Joyzoning verification)
+- Glossary: docs/GLOSSARY.md (Definitions of Pod, Swipe, Mutual Match, RRF, etc.)
+- Operations: docs/OPERATIONS.md (Operator runbook, deployment, and monitoring)
+- Security Best Practices: docs/SECURITY_BEST_PRACTICES.md (Threat model and data privacy)
+- API Reference: docs/api/README.md (Public API, CLI, and REST endpoints)
+- Architecture Decision Records: docs/adr/README.md (ADRs 0001 through 0007)
+- Operational Playbooks: docs/playbooks/README.md (Incident and operational triage runbooks)
+- Postmortems: docs/postmortems/README.md (Blameless engineering postmortems PM-001 through PM-005)
+- Knowledge Base: docs/kb/README.md (Symptom diagnosis matrix and technical FAQ)
+- Technical Papers: docs/papers/README.md (Whitepaper, philosophy, and companion brief)
+- Engineering Wiki: docs/wiki/README.md (Mental models, hybrid search math, pod composition, and agent design)
+

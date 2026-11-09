@@ -1,3 +1,4 @@
+<!-- [LAYER: UI] -->
 <!-- joy:begin soul -->
 ## Soul — how an agent works in this repository
 
