@@ -27,7 +27,7 @@
 [x] Add unit tests for every Elasticsearch repository with a mocked client, including the strict-mapping adapter transforms
 [x] Add an EventController in core that lists selectable events and resolves the active event for a request
 [x] Wire the Elasticsearch repositories into CinderApp behind configuration, keeping the memory repositories for offline mode and tests
-[ ] Add GET /api/conferences and GET /api/conferences/:id routes and require an eventId parameter on attendee, discovery, swipe, match, pod and agenda routes
+[x] Add GET /api/conferences and GET /api/conferences/:id routes and require an eventId parameter on attendee, discovery, swipe, match, pod and agenda routes
 [ ] Scope SSE broadcasts by eventId so clients only receive realtime events for their selected event
 [ ] Move swipe and match state out of DiscoveryController maps into the InteractionRepository
 [ ] Move the discovery reset logic from webServer into a DiscoveryController method so the UI layer holds no state

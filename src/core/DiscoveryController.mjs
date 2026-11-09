@@ -29,12 +29,15 @@ export class DiscoveryController {
    * Retrieves discovery candidate cards for an attendee via Elasticsearch Hybrid Search.
    * @param {string} attendeeId
    * @param {number} [limit=10]
+   * @param {Object} [options]
+   * @param {string} [options.eventId] - only suggest attendees of this event (defaults to the source's event)
    */
-  async getDiscoveryFeed(attendeeId, limit = 10) {
+  async getDiscoveryFeed(attendeeId, limit = 10, { eventId } = {}) {
     const source = await this.attendeeRepo.findById(attendeeId);
     if (!source) {
       throw new Error(`Attendee ${attendeeId} not found`);
     }
+    const scopeEventId = eventId || source.eventId || null;
 
     // Exclude self and already swiped attendees
     const excludedIds = [attendeeId];
@@ -52,15 +55,19 @@ export class DiscoveryController {
       source.challenges
     ].join(" ");
 
+    // The embedded engine holds every event's attendees: over-fetch, then keep the same event only.
     const esResult = await this.esClient.hybridSearch({
       queryText,
       queryVector: source.embedding,
       excludeIds: excludedIds,
-      limit
+      limit: scopeEventId ? Math.max(limit * 4, 50) : limit
     });
+    const scopedHits = esResult.hits
+      .filter((hit) => !scopeEventId || hit.source?.eventId === scopeEventId)
+      .slice(0, limit);
 
     const candidates = [];
-    for (const hit of esResult.hits) {
+    for (const hit of scopedHits) {
       const candidateProfile = hit.source;
       const explanation = explainMatchRelevance(source, candidateProfile, {
         bm25Score: hit.bm25Score,
@@ -143,13 +150,16 @@ export class DiscoveryController {
   /**
    * Lists mutual matches for an attendee.
    * @param {string} attendeeId
+   * @param {Object} [options]
+   * @param {string} [options.eventId] - only matches with partners registered for this event
    */
-  async getMutualMatches(attendeeId) {
+  async getMutualMatches(attendeeId, { eventId } = {}) {
     const results = [];
     for (const match of this.matches.values()) {
       if (match.initiatorId === attendeeId || match.targetId === attendeeId) {
         const partnerId = match.initiatorId === attendeeId ? match.targetId : match.initiatorId;
         const partner = await this.attendeeRepo.findById(partnerId);
+        if (eventId && partner && partner.eventId !== eventId) continue;
         results.push({
           match: match.toJSON(),
           partner: partner ? partner.toJSON() : null

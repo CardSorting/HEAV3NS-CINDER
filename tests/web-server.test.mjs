@@ -90,5 +90,62 @@ describe("CinderWebServer HTTP & API Routes", () => {
     assert.strictEqual(result.steps.length, 10);
     assert.ok(result.podId);
   });
+
+  describe("event scoping", () => {
+    const SEED = "urn:ue:event:cloud-ai-summit-2026";
+    const enc = encodeURIComponent;
+
+    it("lists selectable conferences and describes one", async () => {
+      const list = await (await fetch(`${baseUrl}/api/conferences`)).json();
+      assert.strictEqual(list.defaultEventId, SEED);
+      assert.deepStrictEqual(list.events.map((e) => e.id), [SEED]);
+      assert.strictEqual(list.events[0].isDefault, true);
+      const one = await fetch(`${baseUrl}/api/conferences/${enc(SEED)}`);
+      assert.strictEqual(one.status, 200);
+      assert.strictEqual((await one.json()).name, "Cloud & AI Summit 2026");
+      const missing = await fetch(`${baseUrl}/api/conferences/${enc("urn:ue:event:nope")}`);
+      assert.strictEqual(missing.status, 404);
+      assert.strictEqual((await missing.json()).code, "EVENT_NOT_FOUND");
+    });
+
+    it("scopes attendee, discovery, pod and agenda routes to the requested event", async () => {
+      const attendees = await (await fetch(`${baseUrl}/api/attendees?eventId=${enc(SEED)}`)).json();
+      assert.ok(attendees.length >= 5);
+      assert.ok(attendees.every((a) => a.eventId === SEED));
+      const feed = await (await fetch(`${baseUrl}/api/discovery?eventId=${enc(SEED)}&attendeeId=att_alex_chen`)).json();
+      assert.strictEqual(feed.eventId, SEED);
+      assert.ok(feed.candidates.every((c) => c.profile.eventId === SEED));
+      const agenda = await (await fetch(`${baseUrl}/api/agenda?eventId=${enc(SEED)}`)).json();
+      assert.strictEqual(agenda.eventId, SEED);
+      for (const path of ["/api/attendees", "/api/pods", "/api/agenda", "/api/discovery?attendeeId=att_alex_chen"]) {
+        const sep = path.includes("?") ? "&" : "?";
+        const res = await fetch(`${baseUrl}${path}${sep}eventId=${enc("urn:ue:event:nope")}`);
+        assert.strictEqual(res.status, 404, `${path} with unknown event`);
+      }
+    });
+
+    it("rejects attendees and pods that are not part of the event", async () => {
+      const res = await fetch(`${baseUrl}/api/discovery?attendeeId=att_does_not_exist`);
+      assert.strictEqual(res.status, 404);
+      assert.strictEqual((await res.json()).code, "ATTENDEE_NOT_FOUND");
+      const swipe = await fetch(`${baseUrl}/api/swipe`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fromAttendeeId: "att_alex_chen", toAttendeeId: "att_ghost", action: "like" }) });
+      assert.strictEqual(swipe.status, 404);
+      const pod = await fetch(`${baseUrl}/api/pods/pod_missing/messages`);
+      assert.strictEqual(pod.status, 404);
+      assert.strictEqual((await pod.json()).code, "POD_NOT_FOUND");
+    });
+
+    it("stamps the event onto check-ins and composed pods", async () => {
+      const res = await fetch(`${baseUrl}/api/check-in`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Event Scoped", title: "SRE", interests: ["Observability"] }) });
+      assert.strictEqual((await res.json()).eventId, SEED);
+      const pod = await (await fetch(`${baseUrl}/api/pods/compose`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], theme: "Scoped Pod" }) })).json();
+      assert.strictEqual(pod.eventId, SEED);
+      const pods = await (await fetch(`${baseUrl}/api/pods?eventId=${enc(SEED)}`)).json();
+      assert.ok(pods.some((p) => p.id === pod.id));
+    });
+  });
 });
 

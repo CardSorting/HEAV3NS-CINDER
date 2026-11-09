@@ -58,9 +58,10 @@ export class CinderWebServer {
       try {
         await this.handleRequest(req, res);
       } catch (err) {
-        console.error("HTTP Request Error:", err);
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: err.message }));
+        const status = Number.isInteger(err.status) ? err.status : 500;
+        if (status >= 500) console.error("HTTP Request Error:", err);
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err.message, code: err.code || null }));
       }
     });
 
@@ -123,8 +124,27 @@ export class CinderWebServer {
       return this.sendJson(res, status);
     }
 
+    // Event selection: everything below is scoped to one event (?eventId= / body.eventId, else the default event)
+    if (pathname === "/api/conferences" && method === "GET") {
+      const categories = url.searchParams.get("category");
+      const events = await this.app.eventCtrl.listEvents({
+        categories: categories ? categories.split(",") : undefined,
+        from: url.searchParams.get("from") || undefined,
+        to: url.searchParams.get("to") || undefined,
+        limit: url.searchParams.get("limit") ? parseInt(url.searchParams.get("limit"), 10) : undefined
+      });
+      return this.sendJson(res, { defaultEventId: this.app.defaultEventId, events });
+    }
+
+    if (pathname.startsWith("/api/conferences/") && method === "GET") {
+      const eventId = decodeURIComponent(pathname.slice("/api/conferences/".length));
+      return this.sendJson(res, await this.app.eventCtrl.describeEvent(eventId));
+    }
+
     if (pathname === "/api/agenda" && method === "GET") {
+      const event = await this.eventFor(url.searchParams.get("eventId"));
       return this.sendJson(res, {
+        eventId: event.id,
         sessions: this.app.agenda,
         venues: this.app.venues || [],
         prompts: this.app.discussionPrompts || []
@@ -132,37 +152,46 @@ export class CinderWebServer {
     }
 
     if (pathname === "/api/attendees" && method === "GET") {
-      const list = await this.app.checkInCtrl.listAttendees();
+      const event = await this.eventFor(url.searchParams.get("eventId"));
+      const list = await this.app.checkInCtrl.listAttendees(event.id);
       return this.sendJson(res, list.map((a) => a.toJSON()));
     }
 
     if (pathname === "/api/check-in" && method === "POST") {
       const body = await this.readJsonBody(req);
-      const attendee = await this.app.checkInCtrl.checkIn(body);
+      const event = await this.eventFor(body.eventId);
+      const attendee = await this.app.checkInCtrl.checkIn({ ...body, eventId: event.id });
       return this.sendJson(res, attendee.toJSON());
     }
 
     if (pathname === "/api/discovery" && method === "GET") {
+      const event = await this.eventFor(url.searchParams.get("eventId"));
       const attendeeId = url.searchParams.get("attendeeId") || "att_alex_chen";
       const limit = parseInt(url.searchParams.get("limit") || "10", 10);
-      const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, limit);
-      return this.sendJson(res, feed);
+      await this.attendeeIn(event, attendeeId);
+      const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, limit, { eventId: event.id });
+      return this.sendJson(res, { eventId: event.id, ...feed });
     }
 
     if (pathname === "/api/discovery/reset" && method === "POST") {
       const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
       const attendeeId = body.attendeeId || "att_alex_chen";
+      await this.attendeeIn(event, attendeeId);
       for (const [key, action] of this.app.discoveryCtrl.swipes.entries()) {
         if (key.startsWith(`${attendeeId}:`) && (action === "pass" || body.resetAll)) {
           this.app.discoveryCtrl.swipes.delete(key);
         }
       }
-      const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, 10);
-      return this.sendJson(res, { reset: true, feed });
+      const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, 10, { eventId: event.id });
+      return this.sendJson(res, { reset: true, eventId: event.id, feed });
     }
 
     if (pathname === "/api/swipe" && method === "POST") {
       const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
+      await this.attendeeIn(event, body.fromAttendeeId);
+      await this.attendeeIn(event, body.toAttendeeId);
       if (body.action === "like" && body.autoReciprocate) {
         const reverseKey = `${body.toAttendeeId}:${body.fromAttendeeId}`;
         if (!this.app.discoveryCtrl.swipes.has(reverseKey)) {
@@ -178,9 +207,11 @@ export class CinderWebServer {
     }
 
     if (pathname === "/api/matches" && method === "GET") {
+      const event = await this.eventFor(url.searchParams.get("eventId"));
       const attendeeId = url.searchParams.get("attendeeId") || "att_alex_chen";
-      const mutuals = await this.app.discoveryCtrl.getMutualMatches(attendeeId);
-      const pods = await this.app.podCtrl.listPods();
+      await this.attendeeIn(event, attendeeId);
+      const mutuals = await this.app.discoveryCtrl.getMutualMatches(attendeeId, { eventId: event.id });
+      const pods = await this.app.podCtrl.listPods(event.id);
       const enriched = mutuals.map((item) => {
         const sharedPod = pods.find(
           (p) => p.memberIds.includes(attendeeId) && item.partner && p.memberIds.includes(item.partner.id)
@@ -199,7 +230,8 @@ export class CinderWebServer {
       const parts = pathname.split("/");
       const matchId = parts[3];
       const body = await this.readJsonBody(req);
-      const sender = await this.app.checkInCtrl.getProfile(body.senderId);
+      const event = await this.eventFor(body.eventId);
+      const sender = await this.attendeeIn(event, body.senderId);
       const msg = {
         id: `dm_${Date.now()}`,
         matchId,
@@ -216,7 +248,8 @@ export class CinderWebServer {
     }
 
     if (pathname === "/api/pods" && method === "GET") {
-      const pods = await this.app.podCtrl.listPods();
+      const event = await this.eventFor(url.searchParams.get("eventId"));
+      const pods = await this.app.podCtrl.listPods(event.id);
       return this.sendJson(res, pods.map((p) => {
         const json = p.toJSON();
         json.compositionMeta = p.compositionMeta || null;
@@ -226,12 +259,14 @@ export class CinderWebServer {
 
     if (pathname === "/api/pods/compose" && method === "POST") {
       const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
       const seedAttendeeIds = Array.isArray(body.seedAttendeeIds) && body.seedAttendeeIds.length > 0
         ? body.seedAttendeeIds
         : ["att_alex_chen", "att_maya_lin"];
+      for (const id of seedAttendeeIds) await this.attendeeIn(event, id);
       const theme = body.theme || "Autonomous Cloud & Systems";
       const targetSize = Number(body.targetSize) || 5;
-      const pod = await this.app.podCtrl.composePod({ seedAttendeeIds, theme, targetSize });
+      const pod = await this.app.podCtrl.composePod({ seedAttendeeIds, theme, targetSize, eventId: event.id });
       await this.app.facilitatorCtrl.welcomePod(pod.id);
       const updatedPod = await this.app.podCtrl.getPod(pod.id);
       const json = updatedPod.toJSON();
@@ -242,6 +277,8 @@ export class CinderWebServer {
     if (pathname.startsWith("/api/pods/") && pathname.endsWith("/messages") && method === "GET") {
       const parts = pathname.split("/");
       const podId = parts[3];
+      const event = await this.eventFor(url.searchParams.get("eventId"));
+      await this.podIn(event, podId);
       const messages = await this.app.commCtrl.getMessages(podId);
       return this.sendJson(res, messages);
     }
@@ -250,6 +287,8 @@ export class CinderWebServer {
       const parts = pathname.split("/");
       const podId = parts[3];
       const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
+      await this.podIn(event, podId);
       const message = await this.app.commCtrl.sendMessage({
         podId,
         senderId: body.senderId,
@@ -262,6 +301,8 @@ export class CinderWebServer {
       const parts = pathname.split("/");
       const podId = parts[3];
       const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
+      await this.podIn(event, podId);
       let msg = null;
       if (body.action === "welcome") {
         msg = await this.app.facilitatorCtrl.welcomePod(podId);
@@ -277,6 +318,8 @@ export class CinderWebServer {
       const parts = pathname.split("/");
       const podId = parts[3];
       const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
+      await this.podIn(event, podId);
       const location = body.location || "Main Hall East Patio";
       const time = body.time || "12:15 PM";
       const senderId = body.senderId || "att_alex_chen";
@@ -305,11 +348,9 @@ export class CinderWebServer {
       const parts = pathname.split("/");
       const podId = parts[3];
       const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
       const attendeeId = body.attendeeId || "att_alex_chen";
-      const pod = await this.app.podCtrl.getPod(podId);
-      if (!pod) {
-        return this.sendJson(res, { error: "Pod not found" }, 404);
-      }
+      const pod = await this.podIn(event, podId);
       if (!pod.pinnedMeetup) {
         pod.pinMeetup("Main Hall East Patio", "12:15 PM", true);
       }
@@ -370,6 +411,33 @@ export class CinderWebServer {
     res.end(JSON.stringify(data));
   }
 
+  /**
+   * Resolves the event a request runs against (explicit id, else the default event).
+   * Throws 400/404 request errors that the handler maps to HTTP statuses.
+   * @param {string|null|undefined} eventId
+   */
+  async eventFor(eventId) {
+    return this.app.eventCtrl.resolveEvent(eventId || undefined);
+  }
+
+  /** Returns the attendee if registered for the event, else throws a 404 request error. */
+  async attendeeIn(event, attendeeId) {
+    const attendee = attendeeId ? await this.app.checkInCtrl.getProfile(attendeeId) : null;
+    if (!attendee || (attendee.eventId && attendee.eventId !== event.id)) {
+      throw requestError("ATTENDEE_NOT_FOUND", 404, `Attendee ${attendeeId} is not registered for ${event.id}`);
+    }
+    return attendee;
+  }
+
+  /** Returns the pod if it belongs to the event, else throws a 404 request error. */
+  async podIn(event, podId) {
+    const pod = await this.app.podCtrl.getPod(podId);
+    if (!pod || (pod.eventId && pod.eventId !== event.id)) {
+      throw requestError("POD_NOT_FOUND", 404, `Pod ${podId} not found for ${event.id}`);
+    }
+    return pod;
+  }
+
   async readJsonBody(req) {
     return new Promise((resolve, reject) => {
       let body = "";
@@ -388,3 +456,9 @@ export class CinderWebServer {
   }
 }
 
+function requestError(code, status, message) {
+  const err = new Error(message);
+  err.code = code;
+  err.status = status;
+  return err;
+}
