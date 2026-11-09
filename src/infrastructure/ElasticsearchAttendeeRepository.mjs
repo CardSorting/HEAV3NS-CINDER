@@ -22,9 +22,13 @@ export class ElasticsearchAttendeeRepository extends IAttendeeRepository {
    * @param {string} deps.index - e.g. "cinder-registrations"
    * @param {string|null} [deps.defaultEventId=null] - event used when a call does not name one
    * @param {(props: Object) => any} [deps.toEntity] - entity factory; defaults to plain props
-   * @param {"true"|"false"|"wait_for"} [deps.refresh="false"] - refresh policy for writes
+   * @param {"true"|"false"|"wait_for"} [deps.refresh="true"] - refresh policy for writes.
+   *   Default "true": a checked-in attendee must be discoverable (and embedded) right away. Measured on
+   *   serverless: "true" ≈ 0.6–0.9s write and searchable immediately; "wait_for" ≈ 4.2s write;
+   *   "false" ≈ 0.7s write but only searchable 3–4s later. Check-ins are single, infrequent writes,
+   *   so an explicit refresh per save is affordable.
    */
-  constructor({ esClient, index, defaultEventId = null, toEntity = (props) => props, refresh = "false" }) {
+  constructor({ esClient, index, defaultEventId = null, toEntity = (props) => props, refresh = "true" }) {
     super();
     if (!esClient) throw new Error("ElasticsearchAttendeeRepository requires esClient");
     if (!index) throw new Error("ElasticsearchAttendeeRepository requires an index name");

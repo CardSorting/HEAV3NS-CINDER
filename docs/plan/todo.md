@@ -19,7 +19,7 @@
 [x] Add domain interfaces IEventRepository, IAgendaRepository, ISpaceRepository, IAnnouncementRepository, IPromptRepository, IInteractionRepository and IMessageRepository
 [x] Implement an Elasticsearch EventRepository that lists eventapp documents with cinder.enabled true, sorted by start date, with category and date filters
 [x] Implement an Elasticsearch AttendeeRepository on cinder-registrations that adds eventId, personId and role, drops the 32-dim embedding, and filters every query by eventId
-[ ] Write registrations with refresh wait_for so a checked-in attendee is immediately discoverable and embedded by the cinder-embed-registration pipeline
+[x] Write registrations with refresh wait_for so a checked-in attendee is immediately discoverable and embedded by the cinder-embed-registration pipeline
 [ ] Implement an Elasticsearch InteractionRepository on cinder-interactions for swipes and mutual matches scoped by eventId
 [ ] Implement an Elasticsearch MessageRepository on cinder-messages storing pod messages with channel pod and direct messages with channel direct and matchId
 [ ] Implement an Elasticsearch PodRepository on cinder-pods that stores pods without embedded messages and loads messages through the MessageRepository
