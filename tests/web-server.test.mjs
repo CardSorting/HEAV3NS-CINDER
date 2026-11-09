@@ -59,6 +59,16 @@ describe("CinderWebServer HTTP & API Routes", () => {
     assert.ok(status.elasticsearch);
   });
 
+  it("reports the active search mode explicitly in /api/status", async () => {
+    const status = await (await fetch(`${baseUrl}/api/status`)).json();
+    // Tests run without ES_URL/ES_API_KEY, so the embedded engine must be active and say why.
+    assert.strictEqual(status.searchMode, "embedded");
+    assert.strictEqual(status.elasticsearch.live, false);
+    assert.strictEqual(status.elasticsearch.mode, "embedded-es-engine");
+    assert.strictEqual(status.elasticsearch.configured, false);
+    assert.match(status.elasticsearch.fallbackReason, /no ES_URL\/ES_API_KEY configured/);
+  });
+
   it("handles attendee listing and discovery feed", async () => {
     const res = await fetch(`${baseUrl}/api/attendees`);
     assert.strictEqual(res.status, 200);

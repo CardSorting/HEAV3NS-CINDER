@@ -109,6 +109,8 @@ export class CinderApp {
       appName: "CINDER",
       tagline: "The Social Infrastructure for Conferences",
       status: "healthy",
+      // "live" = queries run on the Elasticsearch cluster; "embedded" = in-process BM25 + vector fallback.
+      searchMode: esStatus.live ? "live" : "embedded",
       elasticsearch: esStatus,
       attendeeCount: attendees.length,
       podCount: pods.length,

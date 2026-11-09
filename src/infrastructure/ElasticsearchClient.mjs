@@ -72,6 +72,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     // Local clusters answer in milliseconds; cloud clusters (API key) can take ~0.5-0.8s for GET /.
     this.healthTimeoutMs = options.healthTimeoutMs || (this.apiKey ? 2000 : 250);
     this.lastHealthError = null;
+    this.lastHealthCheck = null;
     this.fetchImpl = options.fetchImpl || ((...args) => fetch(...args));
     this.isLiveCluster = false;
     this.clusterInfo = null;
@@ -122,10 +123,12 @@ export class ElasticsearchClient extends IElasticsearchClient {
       });
     } catch (err) {
       const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
-      throw new ElasticsearchError(
+      const error = new ElasticsearchError(
         timedOut ? `Elasticsearch ${method} ${path} timed out` : `Elasticsearch ${method} ${path} failed: ${err?.message || err}`,
         { status: 0, type: timedOut ? "timeout" : "network_error", method, path }
       );
+      this.recordConnectivityFailure(error);
+      throw error;
     }
 
     if (raw && res.ok) return res;
@@ -145,6 +148,9 @@ export class ElasticsearchClient extends IElasticsearchClient {
       }
     }
     if (!res.ok) {
+      if (res.status >= 500 || res.status === 401) {
+        this.recordConnectivityFailure(new ElasticsearchError(`${method} ${path} -> ${res.status}`, { status: res.status, type: `http_${res.status}` }));
+      }
       const err = parsed?.error;
       // Inference errors look like { code: "forbidden", type: "error" }: prefer the specific code.
       const type = typeof err === "object"
@@ -173,6 +179,8 @@ export class ElasticsearchClient extends IElasticsearchClient {
       const latencyMs = Number((performance.now() - start).toFixed(2));
       this.isLiveCluster = true;
       this.clusterInfo = data;
+      this.lastHealthError = null;
+      this.lastHealthCheck = { at: new Date().toISOString(), latencyMs };
       return {
         live: true,
         status: "green",
@@ -185,6 +193,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     } catch (err) {
       // Cluster offline, unreachable or rejecting credentials - seamless embedded fallback
       this.lastHealthError = err instanceof ElasticsearchError ? `${err.status} ${err.type}` : String(err?.message || err);
+      this.lastHealthCheck = { at: new Date().toISOString(), latencyMs: Number((performance.now() - start).toFixed(2)) };
     }
 
     this.isLiveCluster = false;
@@ -384,14 +393,32 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * Returns current cluster status and engine configuration.
    */
   async getStatus() {
+    const live = this.isLiveCluster;
     return {
       status: "green",
-      clusterName: this.isLiveCluster ? (this.clusterInfo?.cluster_name || "cinder-live-es") : "cinder-es-cluster",
+      live,
+      mode: live ? "live-cluster" : "embedded-es-engine",
+      // Why we're on the embedded engine: not configured, or the last probe/request failure.
+      fallbackReason: live ? null : (this.apiKey ? (this.lastHealthError || "not probed yet") : "no ES_URL/ES_API_KEY configured"),
+      configured: Boolean(this.apiKey),
+      clusterName: live ? (this.clusterInfo?.cluster_name || "cinder-live-es") : "cinder-es-cluster",
+      version: live ? (this.clusterInfo?.version?.number || null) : null,
+      serverless: live ? this.clusterInfo?.version?.build_flavor === "serverless" : false,
+      lastHealthCheck: this.lastHealthCheck,
       docCount: this.docs.size,
-      mode: this.isLiveCluster ? "live-cluster" : "embedded-es-engine",
       nodeUrl: this.nodeUrl,
       indexName: this.indexName
     };
+  }
+
+  /**
+   * Drops to the embedded engine after a connectivity failure (timeout, network error, 5xx, rejected
+   * credentials) on a live request. The next successful `checkHealth()` restores live mode.
+   * @param {ElasticsearchError} error
+   */
+  recordConnectivityFailure(error) {
+    if (this.isLiveCluster) this.isLiveCluster = false;
+    this.lastHealthError = `${error.status} ${error.type}`;
   }
 
   // ---------------------------------------------------------------------------------------------
