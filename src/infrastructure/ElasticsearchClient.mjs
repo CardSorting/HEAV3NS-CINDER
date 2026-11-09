@@ -63,6 +63,8 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * @param {boolean} [options.explainDiscovery=false] - by default, ask Elasticsearch to explain discovery hits so
    *   each candidate carries its rank in every retriever. Off by default: explain adds ~1.6–2.1s on serverless;
    *   callers opt in per request with hybridSearch({ explain: true }).
+   * @param {Object} [options.discoveryTuning] - live discovery tuning: `{ weights, rankWindowSize, rankConstant }`
+   *   (defaults in discoveryRetriever.mjs)
    * @param {string|null} [options.discoveryIndex=null] - registrations index for live discovery; when set
    *   and the cluster is live, hybridSearch runs an Elasticsearch RRF retriever instead of the embedded engine
    * @param {boolean} [options.legacyAttendeeIndex=true] - create/mirror the old 32-dim `cinder_attendees`
@@ -85,6 +87,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     this.legacyAttendeeIndex = options.legacyAttendeeIndex !== false;
     this.discoveryIndex = options.discoveryIndex || null;
     this.explainDiscovery = options.explainDiscovery === true;
+    this.discoveryTuning = options.discoveryTuning || {};
     this.isLiveCluster = false;
     this.clusterInfo = null;
 
@@ -338,7 +341,8 @@ export class ElasticsearchClient extends IElasticsearchClient {
   /** Live discovery: one Elasticsearch RRF retriever request (see discoveryRetriever.mjs). */
   async liveHybridSearch({ queryText, queryVector, excludeIds = [], limit = 10, eventId, lookingForText, explain = this.explainDiscovery }) {
     const { body, retrievers, weights } = buildDiscoveryQuery({
-      eventId, queryText, profileVector: queryVector, lookingForText, excludeIds, limit, embedModel: this.embedModel
+      eventId, queryText, profileVector: queryVector, lookingForText, excludeIds, limit, embedModel: this.embedModel,
+      ...this.discoveryTuning
     });
     const executed = explain ? { ...body, explain: true } : body;
     const res = await this.search(this.discoveryIndex, executed);

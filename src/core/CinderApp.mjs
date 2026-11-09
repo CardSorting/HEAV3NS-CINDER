@@ -77,6 +77,8 @@ export class CinderApp {
    * @param {string|null} [options.defaultEventId] - event used when a request names none (live demo event)
    * @param {boolean} [options.forceOffline=false] - ignore the config and run on seed data
    * @param {Object} [options.esClient] - pre-built client (tests)
+   * @param {{ weights?: Object, rankWindowSize?: number, rankConstant?: number }} [options.discoveryTuning]
+   *   live discovery retriever tuning (evaluation tooling; defaults in infrastructure/discoveryRetriever.mjs)
    * @param {string} [options.elasticsearchUrl] - legacy: embedded-mode client URL
    */
   constructor(options = {}) {
@@ -101,7 +103,9 @@ export class CinderApp {
       const idx = this.config.indices;
       const defaultEventId = opts.defaultEventId || null;
       this.defaultEventId = defaultEventId;
-      this.esClient = opts.esClient || new ElasticsearchClient({ config: this.config, legacyAttendeeIndex: false, discoveryIndex: idx.registrations });
+      this.esClient = opts.esClient || new ElasticsearchClient({
+        config: this.config, legacyAttendeeIndex: false, discoveryIndex: idx.registrations, discoveryTuning: opts.discoveryTuning
+      });
       const es = this.esClient;
       this.eventRepo = new ElasticsearchEventRepository({ esClient: es, index: idx.events, toEntity: ENTITY.event });
       this.attendeeRepo = new ElasticsearchAttendeeRepository({ esClient: es, index: idx.registrations, defaultEventId, toEntity: ENTITY.attendee });

@@ -283,8 +283,8 @@ describe("Live discovery retriever (buildDiscoveryQuery)", () => {
   it("fuses BM25, profile kNN and the looking_for signals with weighted RRF", () => {
     const { body, retrievers, weights } = buildDiscoveryQuery({ ...base, profileVector: vec() });
     assert.deepStrictEqual(retrievers, ["bm25", "profile_knn", "looking_for_knn", "looking_for_bm25"]);
-    assert.deepStrictEqual(body.retriever.rrf.retrievers.map((r) => r.weight), [1, 1, 3, 2]);
-    assert.deepStrictEqual(weights, { bm25: 1, profile_knn: 1, looking_for_knn: 3, looking_for_bm25: 2 });
+    assert.deepStrictEqual(body.retriever.rrf.retrievers.map((r) => r.weight), [1, 1, 3, 3]);
+    assert.deepStrictEqual(weights, { bm25: 1, profile_knn: 1, looking_for_knn: 3, looking_for_bm25: 3 });
     const [, profile, lfKnn, lfBm25] = inner(body);
     assert.strictEqual(profile.knn.query_vector.length, 1024);
     assert.deepStrictEqual(lfKnn.knn.query_vector_builder, { text_embedding: { model_id: ".m", model_text: "observability engineers" } });
@@ -298,7 +298,7 @@ describe("Live discovery retriever (buildDiscoveryQuery)", () => {
     const { weights } = buildDiscoveryQuery({ ...base, profileVector: vec() });
     assert.ok(weights.looking_for_knn > weights.profile_knn && weights.looking_for_bm25 > weights.bm25);
     const custom = buildDiscoveryQuery({ ...base, profileVector: vec(), weights: { looking_for_knn: 5 } });
-    assert.deepStrictEqual(custom.body.retriever.rrf.retrievers.map((r) => r.weight), [1, 1, 5, 2]);
+    assert.deepStrictEqual(custom.body.retriever.rrf.retrievers.map((r) => r.weight), [1, 1, 5, 3]);
   });
 
   it("filters every retriever to the event and excludes self and swiped attendees", () => {

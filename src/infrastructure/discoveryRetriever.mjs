@@ -2,10 +2,15 @@
 
 /**
  * Default RRF weights. The looking_for signals outweigh profile similarity so discovery surfaces the
- * complementary people an attendee asked for rather than lookalikes. Measured on 40 DevSummit 2026
- * attendees (top 10): equal weights -> 19% complementary / 63% same discipline; these weights -> 59% / 20%.
+ * complementary people an attendee asked for rather than lookalikes.
+ * Tuned with `npm run eval:discovery` (DevSummit 2026, 40 fixed attendees, top 10; "answers" = candidate is
+ * who looking_for asks for, "same" = same discipline):
+ *   equal weights            32% answers / 43% same / 2.9 disciplines
+ *   lf_knn 3, lf_bm25 2      47% / 21% / 3.1
+ *   lf_knn 3, lf_bm25 3      50% / 17% / 3.1   <- default (gains plateau; heavier weights add ~1 point)
+ *   window 20 instead of 50  54% / 22% / 2.8   (less diverse, fewer fused candidates; window stays 50)
  */
-export const DEFAULT_DISCOVERY_WEIGHTS = Object.freeze({ bm25: 1, profile_knn: 1, looking_for_knn: 3, looking_for_bm25: 2 });
+export const DEFAULT_DISCOVERY_WEIGHTS = Object.freeze({ bm25: 1, profile_knn: 1, looking_for_knn: 3, looking_for_bm25: 3 });
 
 /**
  * Reads each retriever's initial rank from an RRF hit explanation
@@ -65,8 +70,9 @@ export function buildDiscoveryQuery({
 }) {
   if (!eventId) throw new Error("buildDiscoveryQuery requires an eventId");
   const filter = { bool: { filter: [{ term: { eventId } }], must_not: excludeIds.length ? [{ ids: { values: [...excludeIds] } }] : [] } };
-  const k = Math.max(limit, Math.min(rankWindowSize, 50));
-  const numCandidates = Math.max(100, k * 4);
+  // kNN retrievers must return at least the fusion window so RRF sees the same depth from every retriever.
+  const k = Math.max(limit, rankWindowSize);
+  const numCandidates = Math.min(10000, Math.max(100, k * 2));
 
   const retrievers = [];
   const names = [];
