@@ -4,7 +4,7 @@
 [x] Obtain the heav3ns-joy checker, replace the machine-specific path in the package.json check script with a portable command, and confirm npm run check passes on master
 [x] Add a plumbing module that loads ES_URL, ES_API_KEY and index names from .env or the process environment without external dependencies
 [x] Add a plumbing clock module that returns the real time or a configured demo time so all time-dependent logic uses one source
-[ ] Choose the demo event from eventapp and set its id and demo clock time in configuration
+[x] Choose the demo event from eventapp and set its id and demo clock time in configuration
 [ ] Extend IElasticsearchClient with generic search, get, index, update, delete-by-query, bulk and inference methods
 [ ] Rewrite the live HTTP transport in ElasticsearchClient to send the ApiKey authorization header, use per-request timeouts, and surface Elasticsearch error types
 [ ] Replace the /_cluster/health probe with GET / so serverless clusters are detected as live instead of returning 410
