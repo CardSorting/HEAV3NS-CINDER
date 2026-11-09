@@ -52,7 +52,9 @@ export class PodOrchestrationController {
     let hybridQuerySpec = null;
     let tookMs = 0;
 
-    // If we need more members to reach target size, retrieve complementary attendees via Elasticsearch Hybrid Search
+    // If we need more members to reach target size, retrieve candidates via Elasticsearch hybrid search: kNN
+    // around the seed attendees' centroid (stored profile vectors) fused with BM25 over the theme and seed
+    // keywords, scoped to the pod's event (live: one RRF retriever on cinder-registrations).
     if (selectedIds.size < targetSize) {
       const seedProfiles = [];
       for (const sid of selectedIds) {
@@ -81,7 +83,8 @@ export class PodOrchestrationController {
         queryText,
         queryVector,
         excludeIds: Array.from(selectedIds),
-        limit: Math.max(targetSize * 2, 10)
+        limit: Math.max(targetSize * 2, 10),
+        eventId: podEventId || undefined
       });
 
       tookMs = esResult.tookMs;

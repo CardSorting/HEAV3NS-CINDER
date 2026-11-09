@@ -270,4 +270,13 @@ describe("ElasticsearchClient live transport (mocked fetch)", () => {
     assert.strictEqual(JSON.parse(calls[0].body).explain, undefined);
     assert.strictEqual(res.querySpec.explain, undefined);
   });
+
+  it("live hybridSearch ignores query vectors that do not match the index dimensions", async () => {
+    const { impl, calls } = mockFetch(() => ({ body: { took: 1, hits: { total: { value: 0 }, hits: [] } } }));
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, discoveryIndex: "cinder-registrations" });
+    es.isLiveCluster = true;
+    await es.hybridSearch({ queryText: "platform", queryVector: Array(32).fill(0.1), excludeIds: [], limit: 5, eventId: "e1" });
+    const body = JSON.parse(calls[0].body);
+    assert.ok(body.retriever.standard, "only BM25 runs: the 32-dim hashed vector is not sent to a 1024-dim field");
+  });
 });

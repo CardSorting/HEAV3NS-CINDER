@@ -41,7 +41,7 @@
 [x] Return the executed Elasticsearch query and per-retriever ranks from discovery so the UI shows the real query specification
 [x] Update explainMatchRelevance to describe complementary matches using looking_for, discipline and shared interests from registration data
 [x] Evaluate discovery quality on the demo event with a fixed set of attendees and tune retriever weights and rank window size
-[ ] Rewrite PodOrchestrationController candidate retrieval to use Elasticsearch kNN around the seed attendees' centroid filtered by eventId
+[x] Rewrite PodOrchestrationController candidate retrieval to use Elasticsearch kNN around the seed attendees' centroid filtered by eventId
 [ ] Enforce discipline diversity in pod composition using the registration discipline field and existing mutual matches as anchors
 [ ] Store the pod centroid vector and compositionMeta on cinder-pods and derive the pod name and theme from shared interests
 [ ] Replace SEED_CONFERENCE_AGENDA, VENUE_LOCATIONS and DISCUSSION_PROMPTS usage in CinderApp, FacilitatorController and AiFacilitatorEngine with the Elasticsearch repositories

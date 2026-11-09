@@ -109,4 +109,22 @@ describe("CinderApp composition root", () => {
     assert.strictEqual(sentParams[0].lookingForText, "Observability engineers");
     assert.deepStrictEqual(sentParams[0].excludeIds, ["att_me", "att_seen"]);
   });
+
+  it("composes live pods by kNN around the seeds' centroid within the event", async () => {
+    const sent = [];
+    const app = new CinderApp({ config: unreachable, clock, defaultEventId: DEMO,
+      esClient: { legacyAttendeeIndex: false, async checkHealth() { return { live: true }; },
+        async hybridSearch(p) { sent.push(p); return { hits: [{ id: "att_c", score: 1, source: { id: "att_c", name: "C" } }], totalHits: 1, tookMs: 1, querySpec: {} }; } } });
+    const vectors = { att_a: Array(1024).fill(0.2), att_b: Array(1024).fill(0.4) };
+    app.attendeeRepo.findById = async (id) => ({ id, name: id, eventId: DEMO, interests: ["Kubernetes"], topics: [], expertise: [], embedding: vectors[id] || [], toJSON() { return { id }; } });
+    app.podRepo.save = async () => {};
+    const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_a", "att_b"], theme: "Platform", targetSize: 3 });
+    assert.strictEqual(sent[0].eventId, DEMO);
+    assert.strictEqual(sent[0].queryVector.length, 1024);
+    // Centroid of [0.2…] and [0.4…] is [0.3…], normalized to unit length for cosine kNN: 1/sqrt(1024) each.
+    assert.ok(sent[0].queryVector.every((v) => Math.abs(v - 1 / 32) < 1e-9), "query vector is the seeds' normalized centroid");
+    assert.deepStrictEqual(sent[0].excludeIds, ["att_a", "att_b"]);
+    assert.deepStrictEqual(pod.memberIds, ["att_a", "att_b", "att_c"]);
+    assert.strictEqual(pod.eventId, DEMO);
+  });
 });

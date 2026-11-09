@@ -88,6 +88,8 @@ export class ElasticsearchClient extends IElasticsearchClient {
     this.discoveryIndex = options.discoveryIndex || null;
     this.explainDiscovery = options.explainDiscovery === true;
     this.discoveryTuning = options.discoveryTuning || {};
+    // Dimensions of the registrations' dense_vector; other query vectors (e.g. 32-dim hashed) are ignored live.
+    this.vectorDims = options.vectorDims || 1024;
     this.isLiveCluster = false;
     this.clusterInfo = null;
 
@@ -340,8 +342,9 @@ export class ElasticsearchClient extends IElasticsearchClient {
 
   /** Live discovery: one Elasticsearch RRF retriever request (see discoveryRetriever.mjs). */
   async liveHybridSearch({ queryText, queryVector, excludeIds = [], limit = 10, eventId, lookingForText, explain = this.explainDiscovery }) {
+    const profileVector = Array.isArray(queryVector) && queryVector.length === this.vectorDims ? queryVector : undefined;
     const { body, retrievers, weights } = buildDiscoveryQuery({
-      eventId, queryText, profileVector: queryVector, lookingForText, excludeIds, limit, embedModel: this.embedModel,
+      eventId, queryText, profileVector, lookingForText, excludeIds, limit, embedModel: this.embedModel,
       ...this.discoveryTuning
     });
     const executed = explain ? { ...body, explain: true } : body;
