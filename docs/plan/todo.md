@@ -1,7 +1,7 @@
 <!-- [LAYER: UI] -->
 [x] Push the feat/elasticsearch-data branch to origin and open a pull request into master
 [x] Merge feat/elasticsearch-data into master and create a feat/elasticsearch-integration branch from it
-[ ] Obtain the heav3ns-joy checker, replace the machine-specific path in the package.json check script with a portable command, and confirm npm run check passes on master
+[x] Obtain the heav3ns-joy checker, replace the machine-specific path in the package.json check script with a portable command, and confirm npm run check passes on master
 [ ] Rotate the Elasticsearch API key that was shared in chat, store the new key only in .env, and rerun elasticsearch/cinder/verify.py to confirm access
 [ ] Add a plumbing module that loads ES_URL, ES_API_KEY and index names from .env or the process environment without external dependencies
 [ ] Add a plumbing clock module that returns the real time or a configured demo time so all time-dependent logic uses one source
