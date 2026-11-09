@@ -5,3 +5,12 @@ node_modules/
 *.log
 src/ui/web/react/dist/
 
+
+# Local secrets (Elasticsearch URL + API key) — never commit
+.env
+.env.*
+!.env.example
+
+# Python tooling (elasticsearch/)
+__pycache__/
+*.pyc
