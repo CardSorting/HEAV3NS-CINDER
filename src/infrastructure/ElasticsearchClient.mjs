@@ -59,6 +59,8 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * @param {number} [options.timeoutMs=5000] - Default per-request timeout
    * @param {string} [options.chatModel] - Chat-completion inference endpoint id
    * @param {typeof fetch} [options.fetchImpl] - Injectable fetch (tests)
+   * @param {boolean} [options.legacyAttendeeIndex=true] - create/mirror the old 32-dim `cinder_attendees`
+   *   index in live mode. The composition root turns this off when the cinder-* repositories are in use.
    */
   constructor(options = {}) {
     super();
@@ -74,6 +76,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     this.lastHealthError = null;
     this.lastHealthCheck = null;
     this.fetchImpl = options.fetchImpl || ((...args) => fetch(...args));
+    this.legacyAttendeeIndex = options.legacyAttendeeIndex !== false;
     this.isLiveCluster = false;
     this.clusterInfo = null;
 
@@ -212,7 +215,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
   async ensureIndex() {
     const health = await this.checkHealth();
 
-    if (this.isLiveCluster) {
+    if (this.isLiveCluster && this.legacyAttendeeIndex) {
       try {
         const exists = await this.request("HEAD", `/${this.indexName}`, { timeoutMs: 1000, allow404: true });
         if (exists === null) {
@@ -274,7 +277,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
       embedding: attendee.embedding || []
     });
 
-    if (this.isLiveCluster) {
+    if (this.isLiveCluster && this.legacyAttendeeIndex) {
       try {
         await this.request("PUT", `/${this.indexName}/_doc/${encodeURIComponent(attendee.id)}`, { body: rawDoc, timeoutMs: 1000 });
       } catch {
