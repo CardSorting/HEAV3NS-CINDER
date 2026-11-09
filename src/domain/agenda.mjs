@@ -1,7 +1,8 @@
 /** [LAYER: DOMAIN] */
 
-/** Session types where attendees are free to meet (used to confirm pod meetups). */
-export const SOCIAL_SESSION_TYPES = Object.freeze(["break", "lunch", "networking", "registration", "arrival"]);
+import { SOCIAL_SESSION_TYPES } from "../plumbing/sessionTypes.mjs";
+
+export { SOCIAL_SESSION_TYPES };
 
 /**
  * Pure Domain Entity: Conference Agenda Session.
