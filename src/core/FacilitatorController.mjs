@@ -2,7 +2,8 @@
 
 import { Message } from "../domain/message.mjs";
 import { generatePrefixedId } from "../plumbing/idGenerator.mjs";
-import { SEED_CONFERENCE_AGENDA } from "../plumbing/conferenceSeedData.mjs";
+import { CONTENT_SESSION_TYPES } from "../plumbing/sessionTypes.mjs";
+import { slotSummary, displayTime } from "../domain/meetupTime.mjs";
 
 /**
  * Controller for Milestone 5: Proactive AI Facilitator.
@@ -15,13 +16,178 @@ export class FacilitatorController {
    * @param {import("../domain/interfaces/IAttendeeRepository.mjs").IAttendeeRepository} params.attendeeRepo
    * @param {import("../domain/interfaces/IEventBus.mjs").IEventBus} params.eventBus
    * @param {import("../domain/interfaces/IAiFacilitatorService.mjs").IAiFacilitatorService} params.facilitatorService
+   * @param {import("../domain/interfaces/IAgendaRepository.mjs").IAgendaRepository} params.agendaRepo
+   * @param {import("../domain/interfaces/IPromptRepository.mjs").IPromptRepository} params.promptRepo
+   * @param {import("../domain/interfaces/ISpaceRepository.mjs").ISpaceRepository} params.spaceRepo
+   * @param {import("../domain/interfaces/IAnnouncementRepository.mjs").IAnnouncementRepository} [params.announcementRepo]
+   * @param {{ nowMs: () => number }} params.clock
+   * @param {string|null} [params.defaultEventId=null] - event for Pods created without one
    */
-  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService }) {
+  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService, agendaRepo, promptRepo, spaceRepo, clock, defaultEventId = null, announcementRepo = null }) {
+    this.announcementRepo = announcementRepo;
+    if (!agendaRepo || !promptRepo || !spaceRepo || !clock) {
+      throw new Error("FacilitatorController requires agendaRepo, promptRepo, spaceRepo and clock");
+    }
     this.podRepo = podRepo;
     this.attendeeRepo = attendeeRepo;
     this.eventBus = eventBus;
     this.facilitatorService = facilitatorService;
-    this.agenda = SEED_CONFERENCE_AGENDA;
+    this.agendaRepo = agendaRepo;
+    this.promptRepo = promptRepo;
+    this.spaceRepo = spaceRepo;
+    this.clock = clock;
+    this.defaultEventId = defaultEventId;
+  }
+
+  /**
+   * The agenda view served on /api/agenda: sessions, meetup-friendly venues and discussion prompts.
+   * @param {string} eventId
+   * @returns {Promise<{ sessions: Object[], venues: Array<{ id: string, name: string, tag: string, capacity: number }>, prompts: string[] }>}
+   */
+  async getAgenda(eventId) {
+    const [sessions, spaces, prompts] = await Promise.all([
+      this.agendaRepo.listByEvent(eventId),
+      this.spaceRepo.listForEvent(eventId, { meetupFriendlyOnly: true }),
+      this.promptRepo.listByPhase("deep-dive")
+    ]);
+    return {
+      sessions: sessions.map((s) => s.toJSON()),
+      venues: spaces.map((s) => ({ id: s.id, name: s.name, tag: s.displayTag(), capacity: s.capacity })),
+      prompts: prompts.map((p) => p.text)
+    };
+  }
+
+  /**
+   * Posts published announcements (publishAt <= clock) to the Pods they concern, once per Pod:
+   * - conference-wide notices (general, logistics, reminder) go to every Pod of the event;
+   * - room and schedule changes go to Pods with a member who bookmarked or speaks at an affected session,
+   *   or whose pinned meetup is at an affected space.
+   * Important and critical announcements are pinned.
+   * @param {string} [eventId] - defaults to the default event
+   * @returns {Promise<{ eventId: string, published: number, delivered: Array<{ podId: string, announcementId: string }> }>}
+   */
+  async deliverAnnouncements(eventId = this.defaultEventId) {
+    if (!this.announcementRepo || !eventId) return { eventId, published: 0, delivered: [] };
+    const published = await this.announcementRepo.listByEvent(eventId, { publishedBeforeMs: this.clock.nowMs() });
+    const delivered = [];
+    if (!published.length) return { eventId, published: 0, delivered };
+
+    for (const pod of await this.podRepo.listAll(eventId)) {
+      const already = new Set(pod.messages.map((m) => m.metadata?.announcementId).filter(Boolean));
+      const pending = published.filter((a) => !already.has(a.id));
+      if (!pending.length) continue;
+
+      const refs = await this.podRefs(pod);
+      let changed = false;
+      for (const ann of pending) {
+        if (ann.isScheduleChange() && !ann.affectsAny(refs)) continue;
+        const icon = ann.severity === "critical" ? "🚨" : ann.isScheduleChange() ? "🔁" : "📣";
+        const message = new Message({
+          id: generatePrefixedId("msg_ann"),
+          podId: pod.id,
+          senderId: "facilitator_ai",
+          senderName: pod.facilitatorName,
+          senderType: "facilitator",
+          content: `${icon} ${ann.title}\n${ann.body}`,
+          pinned: ann.severity !== "info",
+          metadata: { type: "announcement", announcementId: ann.id, kind: ann.kind, severity: ann.severity, publishAt: ann.publishAt }
+        });
+        pod.addMessage(message);
+        changed = true;
+        delivered.push({ podId: pod.id, announcementId: ann.id });
+        this.eventBus.publish("facilitator.announcement", { podId: pod.id, message: message.toJSON() });
+      }
+      if (changed) await this.podRepo.save(pod);
+    }
+    return { eventId, published: published.length, delivered };
+  }
+
+  /** Sessions and spaces a Pod cares about: members' bookmarks and talks, and its pinned meetup place. */
+  async podRefs(pod) {
+    const sessionIds = new Set();
+    for (const id of pod.memberIds) {
+      const member = await this.attendeeRepo.findById(id);
+      for (const s of [...(member?.bookmarkedSessionIds || []), ...(member?.speakerSessionIds || [])]) sessionIds.add(s);
+    }
+    const spaceIds = pod.pinnedMeetup?.spaceId ? [pod.pinnedMeetup.spaceId] : [];
+    return { sessionIds: [...sessionIds], spaceIds };
+  }
+
+  /** The next break/lunch/networking slot by the clock, summarized for facilitator messages. */
+  async nextSocialSlot(eventId) {
+    if (!eventId) return null;
+    const slot = await this.agendaRepo.findNextSocialSlot(eventId, this.clock.nowMs());
+    return slot ? slotSummary(slot.toJSON()) : null;
+  }
+
+  /**
+   * The discussion prompt for a Pod: kNN against the Pod centroid (its members' profile vectors) within a
+   * phase, skipping prompts this Pod has already had. Falls back to the phase list (in order) when the Pod
+   * has no centroid or the vector search fails.
+   * @param {import("../domain/pod.mjs").Pod} pod
+   * @param {"icebreaker"|"deep-dive"|"wrap-up"} [phase="deep-dive"]
+   * @returns {Promise<{ id: string, text: string, phase: string, topics: string[] } | null>}
+   */
+  async promptFor(pod, phase = "deep-dive") {
+    const used = new Set((pod.messages || []).map((m) => m.metadata?.promptId).filter(Boolean));
+    let candidates = [];
+    if (Array.isArray(pod.centroid) && pod.centroid.length) {
+      try {
+        candidates = await this.promptRepo.findForVector(pod.centroid, { phase, limit: 10, text: pod.topic });
+      } catch {
+        candidates = [];
+      }
+    }
+    if (!candidates.length) candidates = await this.promptRepo.listByPhase(phase);
+    return candidates.find((p) => !used.has(p.id)) || candidates[0] || null;
+  }
+
+  /**
+   * Upcoming talks most relevant to a Pod: kNN against its centroid fused with its theme, limited to content
+   * sessions of its event starting after the clock. Pods without a centroid get the next talks by time.
+   * @param {string} podId
+   * @param {Object} [options]
+   * @param {number} [options.limit=3]
+   * @returns {Promise<import("../domain/agenda.mjs").Session[]|null>} null when the Pod does not exist
+   */
+  async relevantTalks(podId, { limit = 3 } = {}) {
+    const pod = await this.podRepo.findById(podId);
+    if (!pod) return null;
+    return this.relevantTalksFor(pod, limit);
+  }
+
+  async relevantTalksFor(pod, limit = 3) {
+    const eventId = pod.eventId || this.defaultEventId;
+    const now = this.clock.nowMs();
+    if (Array.isArray(pod.centroid) && pod.centroid.length) {
+      try {
+        const talks = await this.agendaRepo.findRelevant(eventId, pod.centroid, { afterMs: now, limit, text: pod.topic });
+        if (talks.length) return talks;
+      } catch {
+        // fall through to time order
+      }
+    }
+    return (await this.agendaRepo.listByEvent(eventId))
+      .filter((s) => CONTENT_SESSION_TYPES.includes(s.sessionType) && (s.startsAtMs() ?? 0) >= now)
+      .slice(0, limit);
+  }
+
+  /**
+   * The session an agenda alert is about: the requested one, else the upcoming session most relevant to the
+   * Pod, else the next content session after the clock, else the event's last one.
+   */
+  async resolveAlertSession(eventId, sessionId, pod = null) {
+    if (sessionId) {
+      const requested = await this.agendaRepo.findById(sessionId);
+      if (requested) return requested;
+    }
+    if (pod) {
+      const [relevant] = await this.relevantTalksFor(pod, 1);
+      if (relevant) return relevant;
+    }
+    const content = (await this.agendaRepo.listByEvent(eventId)).filter((s) => CONTENT_SESSION_TYPES.includes(s.sessionType));
+    const now = this.clock.nowMs();
+    return content.find((s) => (s.startsAtMs() ?? 0) >= now) || content[content.length - 1] || null;
   }
 
   /**
@@ -38,7 +204,9 @@ export class FacilitatorController {
       if (att) members.push(att);
     }
 
-    const intro = await this.facilitatorService.generateWelcomeIntro(pod, members);
+    const intro = await this.facilitatorService.generateWelcomeIntro(pod, members, {
+      nextSocial: await this.nextSocialSlot(pod.eventId || this.defaultEventId)
+    });
 
     const message = new Message({
       id: generatePrefixedId("msg_welcome"),
@@ -68,14 +236,20 @@ export class FacilitatorController {
   /**
    * Broadcasts an agenda alert / session reminder to a Pod.
    * @param {string} podId
-   * @param {string} [sessionId="session_05"]
+   * @param {string} [sessionId] - defaults to the next upcoming session
    */
-  async triggerAgendaAlert(podId, sessionId = "session_05") {
+  async triggerAgendaAlert(podId, sessionId) {
     const pod = await this.podRepo.findById(podId);
     if (!pod) return null;
 
-    const session = this.agenda.find((s) => s.id === sessionId) || this.agenda[4];
-    const notif = await this.facilitatorService.generateAgendaNotification(pod, session);
+    const sessionEntity = await this.resolveAlertSession(pod.eventId || this.defaultEventId, sessionId, pod);
+    if (!sessionEntity) return null;
+    const session = sessionEntity.toJSON();
+    const prompt = await this.promptFor(pod);
+    const startsLabel = session.startDate && session.timezone
+      ? displayTime(session.startDate, this.clock.nowMs(), session.timezone)
+      : session.startTime;
+    const notif = await this.facilitatorService.generateAgendaNotification(pod, session, { prompt: prompt?.text, startsLabel });
 
     const message = new Message({
       id: generatePrefixedId("msg_agenda"),
@@ -87,7 +261,8 @@ export class FacilitatorController {
       pinned: true,
       metadata: {
         type: "agenda_alert",
-        session
+        session,
+        promptId: prompt?.id || null
       }
     });
 
@@ -116,7 +291,8 @@ export class FacilitatorController {
       if (att) members.push(att);
     }
 
-    const promptText = await this.facilitatorService.generateDiscussionPrompt(pod, members);
+    const prompt = await this.promptFor(pod);
+    const promptText = await this.facilitatorService.generateDiscussionPrompt(pod, members, { prompt: prompt?.text });
 
     const message = new Message({
       id: generatePrefixedId("msg_prompt"),
@@ -126,7 +302,8 @@ export class FacilitatorController {
       senderType: "facilitator",
       content: promptText,
       metadata: {
-        type: "discussion_prompt"
+        type: "discussion_prompt",
+        promptId: prompt?.id || null
       }
     });
 

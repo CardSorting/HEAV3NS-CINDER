@@ -89,12 +89,22 @@ export class Pod {
    * @param {string} time
    * @param {boolean} [confirmed=true]
    */
-  pinMeetup(location, time, confirmed = true) {
+  /**
+   * @param {string} location - display name of the meeting place
+   * @param {string} time - display time, e.g. "12:15 PM"
+   * @param {boolean} [confirmed=true]
+   * @param {Object} [details]
+   * @param {string|null} [details.spaceId] - cinder-spaces id of the place, when resolved
+   * @param {string|null} [details.startsAt] - absolute ISO start, when resolved against the agenda
+   */
+  pinMeetup(location, time, confirmed = true, { spaceId = null, startsAt = null } = {}) {
     this.pinnedMeetup = {
       location,
       time,
       confirmed
     };
+    if (spaceId) this.pinnedMeetup.spaceId = spaceId;
+    if (startsAt) this.pinnedMeetup.startsAt = startsAt;
   }
 
   toJSON() {

@@ -5,6 +5,7 @@ import { computeBM25Score, tokenizeText, calculateTermFrequencies } from "../plu
 import { cosineSimilarity } from "../plumbing/vectorMath.mjs";
 import { reciprocalRankFusion } from "../plumbing/rrfRanker.mjs";
 import { DEFAULT_EMBED_MODEL } from "../plumbing/elasticConfig.mjs";
+import { buildDiscoveryQuery, parseRetrieverRanks } from "./discoveryRetriever.mjs";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_CHAT_MODEL = ".anthropic-claude-5-sonnet-chat_completion";
@@ -59,6 +60,13 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * @param {number} [options.timeoutMs=5000] - Default per-request timeout
    * @param {string} [options.chatModel] - Chat-completion inference endpoint id
    * @param {typeof fetch} [options.fetchImpl] - Injectable fetch (tests)
+   * @param {boolean} [options.explainDiscovery=false] - by default, ask Elasticsearch to explain discovery hits so
+   *   each candidate carries its rank in every retriever. Off by default: explain adds ~1.6–2.1s on serverless;
+   *   callers opt in per request with hybridSearch({ explain: true }).
+   * @param {Object} [options.discoveryTuning] - live discovery tuning: `{ weights, rankWindowSize, rankConstant }`
+   *   (defaults in discoveryRetriever.mjs)
+   * @param {string|null} [options.discoveryIndex=null] - registrations index for live discovery; when set
+   *   and the cluster is live, hybridSearch runs an Elasticsearch RRF retriever instead of the embedded engine
    * @param {boolean} [options.legacyAttendeeIndex=true] - create/mirror the old 32-dim `cinder_attendees`
    *   index in live mode. The composition root turns this off when the cinder-* repositories are in use.
    */
@@ -77,6 +85,11 @@ export class ElasticsearchClient extends IElasticsearchClient {
     this.lastHealthCheck = null;
     this.fetchImpl = options.fetchImpl || ((...args) => fetch(...args));
     this.legacyAttendeeIndex = options.legacyAttendeeIndex !== false;
+    this.discoveryIndex = options.discoveryIndex || null;
+    this.explainDiscovery = options.explainDiscovery === true;
+    this.discoveryTuning = options.discoveryTuning || {};
+    // Dimensions of the registrations' dense_vector; other query vectors (e.g. 32-dim hashed) are ignored live.
+    this.vectorDims = options.vectorDims || 1024;
     this.isLiveCluster = false;
     this.clusterInfo = null;
 
@@ -137,7 +150,8 @@ export class ElasticsearchClient extends IElasticsearchClient {
     if (raw && res.ok) return res;
     if (res.status === 404 && allow404) return null;
 
-    const text = await res.text();
+    // The timeout signal also covers reading the body; a slow body must fail as a typed error too.
+    const text = await this.readBody(res, method, path);
     let parsed = null;
     try {
       parsed = text ? JSON.parse(text) : {};
@@ -165,6 +179,21 @@ export class ElasticsearchClient extends IElasticsearchClient {
       });
     }
     return parsed;
+  }
+
+  /** Reads a response body, mapping aborts/timeouts during the read to ElasticsearchError. */
+  async readBody(res, method, path) {
+    try {
+      return await res.text();
+    } catch (err) {
+      const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
+      const error = new ElasticsearchError(
+        timedOut ? `Elasticsearch ${method} ${path} timed out reading the response` : `Elasticsearch ${method} ${path} response failed: ${err?.message || err}`,
+        { status: res.status, type: timedOut ? "timeout" : "network_error", method, path }
+      );
+      this.recordConnectivityFailure(error);
+      throw error;
+    }
   }
 
   /**
@@ -293,14 +322,68 @@ export class ElasticsearchClient extends IElasticsearchClient {
   }
 
   /**
-   * Performs Elasticsearch Hybrid Search (BM25 + kNN dense_vector + RRF).
+   * Hybrid attendee search (BM25 + dense vector kNN + RRF).
+   * Live (discoveryIndex set and cluster live): Elasticsearch RRF retriever over the registrations index,
+   * scoped to `eventId`, using the stored profile vector and the `looking_for` text.
+   * Otherwise: the embedded in-process engine.
+   * @param {Object} params
+   * @param {string} params.queryText
+   * @param {number[]} [params.queryVector] - embedded mode: 32-dim vector; live mode: stored 1024-dim profile vector
+   * @param {string[]} [params.excludeIds]
+   * @param {number} [params.limit]
+   * @param {string} [params.eventId] - live mode: event to search in (required live)
+   * @param {string} [params.lookingForText] - live mode: requester's looking_for
+   * @param {boolean} [params.explain] - live mode: return per-retriever ranks (slower); defaults to explainDiscovery
    */
-  async hybridSearch({
+  async hybridSearch(params) {
+    if (this.discoveryIndex && this.isLiveCluster && params.eventId) return this.liveHybridSearch(params);
+    return this.embeddedHybridSearch(params);
+  }
+
+  /** Live discovery: one Elasticsearch RRF retriever request (see discoveryRetriever.mjs). */
+  async liveHybridSearch({ queryText, queryVector, excludeIds = [], limit = 10, eventId, lookingForText, explain = this.explainDiscovery }) {
+    const profileVector = Array.isArray(queryVector) && queryVector.length === this.vectorDims ? queryVector : undefined;
+    const { body, retrievers, weights } = buildDiscoveryQuery({
+      eventId, queryText, profileVector, lookingForText, excludeIds, limit, embedModel: this.embedModel,
+      ...this.discoveryTuning
+    });
+    const executed = explain ? { ...body, explain: true } : body;
+    const res = await this.search(this.discoveryIndex, executed);
+    const explanations = new Map((res.raw?.hits?.hits || []).map((h) => [h._id, h._explanation]));
+    return {
+      hits: res.hits.map((h) => {
+        const retrieverRanks = parseRetrieverRanks(explanations.get(h.id), retrievers);
+        return {
+          id: h.id,
+          score: h.score,
+          rrfScore: h.score,
+          bm25Score: null,
+          knnScore: null,
+          // Ranks of this candidate in each retriever before fusion (null = not returned by that retriever).
+          bm25Rank: retrieverRanks.bm25 ?? null,
+          knnRank: retrieverRanks.profile_knn ?? retrieverRanks.looking_for_knn ?? null,
+          retrieverRanks,
+          source: h.source
+        };
+      }),
+      totalHits: res.total,
+      tookMs: res.tookMs,
+      // The request exactly as executed (query vectors shortened for display).
+      querySpec: { index: this.discoveryIndex, retrievers, weights, ...summarizeVectors(executed) },
+      engine: "elasticsearch"
+    };
+  }
+
+  /** Embedded in-process hybrid search (offline mode and fallback). */
+  async embeddedHybridSearch({
     queryText,
     queryVector,
     excludeIds = [],
-    limit = 10
+    limit = 10,
+    eventId
   }) {
+    // Scope to one event when asked (the embedded index holds every event's attendees).
+    const inScope = (docEntry) => !eventId || docEntry.rawDoc?.eventId === eventId;
     const start = performance.now();
     const queryTerms = tokenizeText(queryText);
     const totalDocs = this.docs.size;
@@ -310,7 +393,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     // 1. BM25 Lexical Phase
     const bm25Candidates = [];
     for (const [id, docEntry] of this.docs.entries()) {
-      if (excludeSet.has(id)) continue;
+      if (excludeSet.has(id) || !inScope(docEntry)) continue;
       const score = computeBM25Score({
         queryTerms,
         docTermFreqs: docEntry.termFreqs,
@@ -326,7 +409,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     // 2. Dense Vector kNN Phase
     const knnCandidates = [];
     for (const [id, docEntry] of this.docs.entries()) {
-      if (excludeSet.has(id)) continue;
+      if (excludeSet.has(id) || !inScope(docEntry)) continue;
       const sim = cosineSimilarity(queryVector, docEntry.embedding);
       knnCandidates.push({ id, score: Number(sim.toFixed(4)), doc: docEntry.rawDoc });
     }
@@ -542,7 +625,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     const model = modelId || this.chatModel;
     const path = `/_inference/chat_completion/${encodeURIComponent(model)}/_stream`;
     const res = await this.request("POST", path, { body: { messages }, timeoutMs, raw: true });
-    const text = await res.text();
+    const text = await this.readBody(res, "POST", path);
     let content = "";
     for (const line of text.split(/\r?\n/)) {
       if (!line.startsWith("data:")) continue;
@@ -563,6 +646,14 @@ export class ElasticsearchClient extends IElasticsearchClient {
     }
     return { content, modelId: model };
   }
+}
+
+/** Copy of a search body with long query vectors shortened for display (the request itself is unchanged). */
+function summarizeVectors(body) {
+  return JSON.parse(JSON.stringify(body, (key, value) =>
+    key === "query_vector" && Array.isArray(value)
+      ? [...value.slice(0, 4).map((v) => Number(v.toFixed(4))), `…(${value.length} dims)`]
+      : value));
 }
 
 /** Adds `exclude_vectors: false` to a search body's `_source` option without dropping filters. */

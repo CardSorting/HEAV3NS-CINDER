@@ -248,5 +248,44 @@ describe("CinderWebServer HTTP & API Routes", () => {
       const stored = (await (await fetch(`${baseUrl}/api/pods`)).json()).find((p) => p.id === pod.id);
       assert.deepStrictEqual(stored.pinnedMeetup.rsvps, ["att_alex_chen"]);
     });
+
+    it("derives the pod theme from members' shared interests when none is requested", async () => {
+      const pod = await (await fetch(`${baseUrl}/api/pods/compose`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 4 }) })).json();
+      assert.strictEqual(pod.compositionMeta.themeSource, "shared-interests");
+      assert.ok(pod.topic.includes("Kubernetes"), `theme from shared interests, got "${pod.topic}"`);
+      assert.ok(pod.name.endsWith(pod.topic));
+      const requested = await (await fetch(`${baseUrl}/api/pods/compose`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seedAttendeeIds: ["att_alex_chen"], theme: "Autonomous Cloud & Systems", targetSize: 3 }) })).json();
+      assert.strictEqual(requested.topic, "Autonomous Cloud & Systems");
+      assert.strictEqual(requested.compositionMeta.themeSource, "requested");
+    });
+
+    it("returns the selected event's agenda, venues and prompts in the existing shape", async () => {
+      const agenda = await (await fetch(`${baseUrl}/api/agenda?eventId=${enc(SEED)}`)).json();
+      assert.strictEqual(agenda.eventId, SEED);
+      assert.deepStrictEqual(agenda.event, { id: SEED, name: "Cloud & AI Summit 2026", timezone: "America/Denver",
+        startDate: "2026-12-23T09:00:00-07:00", endDate: "2026-12-23T17:30:00-07:00" });
+      assert.strictEqual(agenda.sessions.length, 5);
+      for (const s of agenda.sessions) {
+        for (const key of ["id", "title", "speakers", "startTime", "endTime", "room", "track", "description"]) assert.ok(key in s, `session.${key}`);
+        assert.match(s.startTime, /^\d{2}:\d{2}$/);
+        assert.ok(Date.parse(s.startDate), "absolute start included");
+      }
+      const lunch = agenda.sessions.find((s) => s.sessionType === "lunch");
+      assert.strictEqual(lunch.startTime, "12:15");
+      assert.ok(agenda.venues.length >= 4 && agenda.venues.every((v) => v.id && v.name && v.tag));
+      assert.ok(agenda.prompts.length >= 3 && agenda.prompts.every((x) => typeof x === "string"));
+    });
+
+    it("lists upcoming talks relevant to a pod", async () => {
+      const pod = await (await fetch(`${baseUrl}/api/pods/compose`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 3 }) })).json();
+      const res = await (await fetch(`${baseUrl}/api/pods/${pod.id}/talks?limit=2`)).json();
+      assert.strictEqual(res.podId, pod.id);
+      assert.strictEqual(res.talks.length, 2);
+      assert.ok(res.talks.every((s) => ["keynote", "talk", "workshop", "panel"].includes(s.sessionType)), "content sessions only");
+      assert.strictEqual((await fetch(`${baseUrl}/api/pods/pod_nope/talks`)).status, 404);
+    });
   });
 });

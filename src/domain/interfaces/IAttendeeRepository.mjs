@@ -17,9 +17,13 @@ export class IAttendeeRepository {
   /**
    * Retrieves an attendee by ID.
    * @param {string} _id
+   * @param {Object} [_options]
+   * @param {boolean} [_options.includeVectors=false] - load the stored profile embedding (needed when it is
+   *   reused as a kNN query vector; Elasticsearch excludes vectors from _source by default)
+   * @param {string} [_options.eventId] - also require the attendee to belong to this event
    * @returns {Promise<import("../attendee.mjs").Attendee | null>}
    */
-  async findById(_id) {
+  async findById(_id, _options) {
     throw new Error("IAttendeeRepository.findById must be implemented by an infrastructure adapter.");
   }
 

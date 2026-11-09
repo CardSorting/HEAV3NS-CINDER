@@ -157,9 +157,9 @@ export class CinderWebServer {
       const event = await this.eventFor(url.searchParams.get("eventId"));
       return this.sendJson(res, {
         eventId: event.id,
-        sessions: this.app.agenda,
-        venues: this.app.venues || [],
-        prompts: this.app.discussionPrompts || []
+        // Date and timezone so clients can place "HH:MM" session times (startDate/endDate are absolute).
+        event: { id: event.id, name: event.name, timezone: event.timezone, startDate: event.startDate, endDate: event.endDate },
+        ...(await this.app.facilitatorCtrl.getAgenda(event.id))
       });
     }
 
@@ -181,7 +181,8 @@ export class CinderWebServer {
       const attendeeId = url.searchParams.get("attendeeId") || "att_alex_chen";
       const limit = parseInt(url.searchParams.get("limit") || "10", 10);
       await this.attendeeIn(event, attendeeId);
-      const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, limit, { eventId: event.id });
+      const explain = /^(1|true)$/i.test(url.searchParams.get("explain") || "");
+      const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, limit, { eventId: event.id, explain });
       return this.sendJson(res, { eventId: event.id, ...feed });
     }
 
@@ -265,7 +266,7 @@ export class CinderWebServer {
         ? body.seedAttendeeIds
         : ["att_alex_chen", "att_maya_lin"];
       for (const id of seedAttendeeIds) await this.attendeeIn(event, id);
-      const theme = body.theme || "Autonomous Cloud & Systems";
+      const theme = body.theme || undefined; // omitted -> derived from the members' shared interests
       const targetSize = Number(body.targetSize) || 5;
       const pod = await this.app.podCtrl.composePod({ seedAttendeeIds, theme, targetSize, eventId: event.id });
       await this.app.facilitatorCtrl.welcomePod(pod.id);
@@ -298,6 +299,15 @@ export class CinderWebServer {
       return this.sendJson(res, message.toJSON());
     }
 
+    if (pathname.startsWith("/api/pods/") && pathname.endsWith("/talks") && method === "GET") {
+      const podId = pathname.split("/")[3];
+      const event = await this.eventFor(url.searchParams.get("eventId"));
+      await this.podIn(event, podId);
+      const limit = Math.min(10, parseInt(url.searchParams.get("limit") || "3", 10) || 3);
+      const talks = await this.app.facilitatorCtrl.relevantTalks(podId, { limit });
+      return this.sendJson(res, { podId, eventId: event.id, talks: (talks || []).map((s) => s.toJSON()) });
+    }
+
     if (pathname.startsWith("/api/pods/") && pathname.endsWith("/facilitator") && method === "POST") {
       const parts = pathname.split("/");
       const podId = parts[3];
@@ -308,7 +318,7 @@ export class CinderWebServer {
       if (body.action === "welcome") {
         msg = await this.app.facilitatorCtrl.welcomePod(podId);
       } else if (body.action === "agenda") {
-        msg = await this.app.facilitatorCtrl.triggerAgendaAlert(podId, body.sessionId || "session_05");
+        msg = await this.app.facilitatorCtrl.triggerAgendaAlert(podId, body.sessionId);
       } else {
         msg = await this.app.facilitatorCtrl.triggerDiscussionPrompt(podId);
       }
@@ -343,6 +353,12 @@ export class CinderWebServer {
         attending: body.attending !== false
       });
       return this.sendJson(res, pinned);
+    }
+
+    if (pathname === "/api/announcements/deliver" && method === "POST") {
+      const body = await this.readJsonBody(req);
+      const event = await this.eventFor(body.eventId);
+      return this.sendJson(res, await this.app.facilitatorCtrl.deliverAnnouncements(event.id));
     }
 
     if (pathname === "/api/scenario/run" && method === "POST") {

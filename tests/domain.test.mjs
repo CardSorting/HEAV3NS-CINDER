@@ -19,6 +19,8 @@ import { IAnnouncementRepository } from "../src/domain/interfaces/IAnnouncementR
 import { IPromptRepository } from "../src/domain/interfaces/IPromptRepository.mjs";
 import { IInteractionRepository } from "../src/domain/interfaces/IInteractionRepository.mjs";
 import { IMessageRepository } from "../src/domain/interfaces/IMessageRepository.mjs";
+import { selectPodMembers, disciplineOf, derivePodTheme } from "../src/domain/podComposition.mjs";
+import { resolveMeetupTime, parseClockTime } from "../src/domain/meetupTime.mjs";
 import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
 
 describe("Domain Entities", () => {
@@ -321,3 +323,142 @@ describe("Repository contracts for event-scoped data", () => {
     });
   }
 });
+
+describe("Complementary match explanations", () => {
+  const amara = { id: "a", name: "Amara", title: "SRE Lead", discipline: "sre", interests: ["Runbook Automation", "SLOs"], expertise: ["Python", "Prometheus"],
+    looking_for: "Looking to meet backend engineers who design APIs and systems that survive scale, especially around Runbook Automation." };
+  const ingrid = { id: "b", name: "Ingrid", title: "Backend Engineer", discipline: "backend", interests: ["API Design", "Runbook Automation"], expertise: ["Go", "gRPC", "PostgreSQL"],
+    looking_for: "Hoping to connect with SREs who have been paged at 3 AM and fixed the root cause." };
+  const mei = { id: "c", name: "Mei", title: "Senior SRE", discipline: "sre", interests: ["SLOs"], expertise: ["Prometheus"], looking_for: "Want to find platform engineers." };
+
+  it("leads with the fact that the candidate is who the attendee asked for, and detects mutual fit", () => {
+    const e = explainMatchRelevance(amara, ingrid, { retrieverRanks: { bm25: 40, profile_knn: 30, looking_for_knn: 2, looking_for_bm25: 1 } });
+    assert.strictEqual(e.answersLookingFor, true);
+    assert.strictEqual(e.mutualFit, true, "Ingrid is looking for SREs");
+    assert.strictEqual(e.headline, "Mutual fit: Backend Engineer you asked to meet");
+    assert.match(e.synergySummary, /Ingrid \(Backend Engineer\) fits what you're looking for\. You both work with Runbook Automation, and Ingrid adds Go, gRPC, PostgreSQL\. They're looking for someone like you too\./);
+    assert.strictEqual(e.reasons.length, 4);
+    assert.strictEqual(e.scorePercent, 99, "best live rank 1 -> 99");
+  });
+
+  it("does not treat generic role words or lookalikes as an answer to looking_for", () => {
+    const e = explainMatchRelevance(amara, mei, { retrieverRanks: { bm25: 12, profile_knn: 20, looking_for_knn: null } });
+    assert.strictEqual(e.answersLookingFor, false, "'engineers' alone does not make an SRE a backend engineer");
+    assert.strictEqual(e.mutualFit, false);
+    assert.strictEqual(e.headline, "Shared focus on SLOs");
+    assert.strictEqual(e.scorePercent, 88, "best rank 12 -> 88");
+  });
+
+  it("matches on expertise named in looking_for and keeps the old fields", () => {
+    const e = explainMatchRelevance({ ...mei, looking_for: "someone strong in gRPC and PostgreSQL" }, ingrid);
+    assert.strictEqual(e.answersLookingFor, true);
+    assert.deepStrictEqual(Object.keys(e).slice(0, 5), ["headline", "sharedInterests", "complementaryStrengths", "synergySummary", "scorePercent"]);
+    assert.strictEqual(e.scorePercent, 75, "no score information -> 75");
+  });
+});
+
+describe("Pod composition diversity", () => {
+  const p = (id, discipline) => ({ id, discipline });
+  const seeds = [p("s1", "platform"), p("s2", "platform")];
+
+  it("caps each discipline while keeping relevance order", () => {
+    const candidates = [p("c1", "platform"), p("c2", "platform"), p("c3", "sre"), p("c4", "sre"), p("c5", "sre"), p("c6", "security")];
+    const r = selectPodMembers({ seeds, candidates, targetSize: 5 });
+    assert.deepStrictEqual(r.members.map((m) => m.id), ["s1", "s2", "c3", "c4", "c6"]);
+    assert.deepStrictEqual(r.disciplines, { platform: 2, sre: 2, security: 1 });
+    assert.deepStrictEqual(r.skippedForDiversity, ["c1", "c2", "c5"]);
+    assert.strictEqual(r.relaxedCap, false);
+  });
+
+  it("adds the seeds' mutual matches first as anchors", () => {
+    const r = selectPodMembers({ seeds, anchors: [p("m1", "data-eng")], candidates: [p("c3", "sre"), p("c4", "ml-eng"), p("c5", "backend")], targetSize: 5 });
+    assert.deepStrictEqual(r.members.map((m) => m.id), ["s1", "s2", "m1", "c3", "c4"]);
+    assert.deepStrictEqual(r.anchorsUsed, ["m1"]);
+  });
+
+  it("relaxes the cap only when the pod cannot otherwise be filled", () => {
+    const r = selectPodMembers({ seeds, candidates: [p("c1", "platform"), p("c2", "platform"), p("c3", "sre")], targetSize: 5 });
+    assert.strictEqual(r.members.length, 5);
+    assert.strictEqual(r.relaxedCap, true);
+  });
+
+  it("derives a discipline from the title when the registration has none", () => {
+    assert.strictEqual(disciplineOf({ discipline: "SRE", title: "Staff SRE" }), "sre");
+    assert.strictEqual(disciplineOf({ title: "Senior Platform Engineer" }), "platform");
+    assert.strictEqual(disciplineOf({ title: "Principal Observability Architect" }), "observability architect");
+    assert.strictEqual(disciplineOf({}), "unknown");
+  });
+});
+
+describe("Pod theme from shared interests", () => {
+  it("uses the two interests shared by the most members (case-insensitive)", () => {
+    const theme = derivePodTheme([
+      { interests: ["Kubernetes", "eBPF"] }, { interests: ["kubernetes", "Observability"] },
+      { interests: ["Observability", "Kubernetes"] }, { interests: ["Go"], topics: ["eBPF"] }
+    ]);
+    assert.strictEqual(theme, "Kubernetes & eBPF");
+  });
+  it("falls back to the most common single interest, then the fallback", () => {
+    assert.strictEqual(derivePodTheme([{ interests: ["Go"] }, { interests: ["Rust"] }]), "Go");
+    assert.strictEqual(derivePodTheme([], "Conference connections"), "Conference connections");
+  });
+});
+
+describe("Meetup time resolution", () => {
+  const tz = "America/Denver";
+  const s = (title, sessionType, start, end) => ({ title, sessionType, startDate: `2026-12-23T${start}:00-07:00`, endDate: `2026-12-23T${end}:00-07:00`, timezone: tz });
+  const sessions = [s("Keynote", "keynote", "09:15", "10:15"), s("Coffee Break", "break", "10:15", "10:30"),
+    s("Talk", "talk", "11:30", "12:15"), s("Lunch & Pod Meetups", "lunch", "12:15", "13:30"), s("Afternoon Break", "break", "15:15", "15:45")];
+  const at = (hhmm) => Date.parse(`2026-12-23T${hhmm}:00-07:00`);
+
+  it("uses the next social slot when the message names no time", () => {
+    const r = resolveMeetupTime({ text: "meet on the patio?", sessions, nowMs: at("11:45") });
+    assert.strictEqual(r.startsAt, "2026-12-23T12:15:00-07:00");
+    assert.strictEqual(r.time, "12:15 PM");
+    assert.strictEqual(r.slot.title, "Lunch & Pod Meetups");
+    assert.strictEqual(r.source, "agenda");
+  });
+
+  it("joins an ongoing social slot from now", () => {
+    const r = resolveMeetupTime({ text: "meet now", sessions, nowMs: at("12:40") });
+    assert.strictEqual(r.slot.title, "Lunch & Pod Meetups");
+    assert.strictEqual(Date.parse(r.startsAt), at("12:40"));
+  });
+
+  it("honours an explicit time on the event day and timezone", () => {
+    const r = resolveMeetupTime({ text: "patio at 12:40?", sessions, nowMs: at("11:45") });
+    assert.strictEqual(r.startsAt, "2026-12-23T12:40:00-07:00");
+    assert.strictEqual(r.time, "12:40 PM");
+    assert.strictEqual(r.slot.title, "Lunch & Pod Meetups", "falls inside lunch");
+    assert.strictEqual(r.source, "message");
+    assert.strictEqual(resolveMeetupTime({ text: "coffee at 3:20pm", sessions, nowMs: at("11:45") }).slot.title, "Afternoon Break");
+  });
+
+  it("moves 'tomorrow' and already-past times to the next event day", () => {
+    const day2 = [s("Breakfast", "break", "08:00", "09:00"), s("Coffee Break", "break", "10:15", "10:30")]
+      .map((x) => ({ ...x, startDate: x.startDate.replace("12-23", "12-24"), endDate: x.endDate.replace("12-23", "12-24") }));
+    const twoDays = [...sessions, ...day2];
+    assert.strictEqual(resolveMeetupTime({ text: "coffee at 10:20 tomorrow?", sessions: twoDays, nowMs: at("11:45") }).startsAt, "2026-12-24T10:20:00-07:00");
+    const past = resolveMeetupTime({ text: "coffee at 10:20?", sessions: twoDays, nowMs: at("11:45") });
+    assert.strictEqual(past.startsAt, "2026-12-24T10:20:00-07:00");
+    assert.strictEqual(past.slot.title, "Coffee Break");
+    assert.strictEqual(past.time, "Thu 10:20 AM", "another day this week shows the weekday");
+    const far = resolveMeetupTime({ text: "meet?", sessions, nowMs: Date.parse("2026-11-09T12:00:00-07:00") });
+    assert.strictEqual(far.time, "Dec 23, 10:15 AM", "weeks ahead shows the date");
+    assert.strictEqual(resolveMeetupTime({ text: "patio at 12:40", sessions: twoDays, nowMs: at("11:45") }).startsAt, "2026-12-23T12:40:00-07:00", "later today stays today");
+  });
+
+  it("returns null when the day's social slots are over and no time is named", () => {
+    assert.strictEqual(resolveMeetupTime({ text: "meet?", sessions, nowMs: at("16:00") }), null);
+  });
+
+  it("parses clock times but not room numbers", () => {
+    assert.deepStrictEqual(parseClockTime("at 12:30"), { hours: 12, minutes: 30 });
+    assert.deepStrictEqual(parseClockTime("1pm works"), { hours: 13, minutes: 0 });
+    assert.deepStrictEqual(parseClockTime("12:15 PM"), { hours: 12, minutes: 15 });
+    assert.deepStrictEqual(parseClockTime("at 2:30"), { hours: 14, minutes: 30 }, "conference hours: 2:30 is afternoon");
+    assert.strictEqual(parseClockTime("outside room 2.04"), null);
+    assert.strictEqual(parseClockTime("room 204"), null);
+  });
+});
+

@@ -39,13 +39,10 @@ import { FacilitatorController } from "./FacilitatorController.mjs";
 import { EventController } from "./EventController.mjs";
 
 import { createClock } from "../plumbing/clock.mjs";
-import {
-  SEED_ATTENDEES,
-  SEED_CONFERENCE_AGENDA,
-  SEED_EVENT,
-  VENUE_LOCATIONS,
-  DISCUSSION_PROMPTS
-} from "../plumbing/conferenceSeedData.mjs";
+import { SEED_ATTENDEES, SEED_EVENT } from "../plumbing/conferenceSeedData.mjs";
+
+/** Health-probe timeout used at startup (cold connections to a cloud cluster are slow). */
+const STARTUP_PROBE_TIMEOUT_MS = 5000;
 
 /** Entity factories injected into the adapters (infrastructure never imports concrete domain code). */
 const ENTITY = Object.freeze({
@@ -77,6 +74,8 @@ export class CinderApp {
    * @param {string|null} [options.defaultEventId] - event used when a request names none (live demo event)
    * @param {boolean} [options.forceOffline=false] - ignore the config and run on seed data
    * @param {Object} [options.esClient] - pre-built client (tests)
+   * @param {{ weights?: Object, rankWindowSize?: number, rankConstant?: number }} [options.discoveryTuning]
+   *   live discovery retriever tuning (evaluation tooling; defaults in infrastructure/discoveryRetriever.mjs)
    * @param {string} [options.elasticsearchUrl] - legacy: embedded-mode client URL
    */
   constructor(options = {}) {
@@ -101,17 +100,19 @@ export class CinderApp {
       const idx = this.config.indices;
       const defaultEventId = opts.defaultEventId || null;
       this.defaultEventId = defaultEventId;
-      this.esClient = opts.esClient || new ElasticsearchClient({ config: this.config, legacyAttendeeIndex: false });
+      this.esClient = opts.esClient || new ElasticsearchClient({
+        config: this.config, legacyAttendeeIndex: false, discoveryIndex: idx.registrations, discoveryTuning: opts.discoveryTuning
+      });
       const es = this.esClient;
       this.eventRepo = new ElasticsearchEventRepository({ esClient: es, index: idx.events, toEntity: ENTITY.event });
       this.attendeeRepo = new ElasticsearchAttendeeRepository({ esClient: es, index: idx.registrations, defaultEventId, toEntity: ENTITY.attendee });
       this.messageRepo = new ElasticsearchMessageRepository({ esClient: es, index: idx.messages, defaultEventId, toEntity: ENTITY.message });
       this.podRepo = new ElasticsearchPodRepository({ esClient: es, index: idx.pods, messageRepo: this.messageRepo, defaultEventId, toEntity: ENTITY.pod });
       this.interactionRepo = new ElasticsearchInteractionRepository({ esClient: es, index: idx.interactions, defaultEventId, toEntity: ENTITY.match });
-      this.agendaRepo = new ElasticsearchAgendaRepository({ esClient: es, index: idx.sessions, toEntity: ENTITY.session });
+      this.agendaRepo = new ElasticsearchAgendaRepository({ esClient: es, index: idx.sessions, toEntity: ENTITY.session, embedModel: this.config.embedModel });
       this.spaceRepo = new ElasticsearchSpaceRepository({ esClient: es, index: idx.spaces, eventsIndex: idx.events, toEntity: ENTITY.space });
       this.announcementRepo = new ElasticsearchAnnouncementRepository({ esClient: es, index: idx.announcements, toEntity: ENTITY.announcement });
-      this.promptRepo = new ElasticsearchPromptRepository({ esClient: es, index: idx.prompts });
+      this.promptRepo = new ElasticsearchPromptRepository({ esClient: es, index: idx.prompts, embedModel: this.config.embedModel });
     } else {
       // Offline always runs against the bundled seed event, whatever the live default is.
       const defaultEventId = SEED_EVENT.id;
@@ -137,7 +138,8 @@ export class CinderApp {
     this.checkInCtrl = new CheckInController({
       attendeeRepo: this.attendeeRepo,
       esClient: this.esClient,
-      eventBus: this.eventBus
+      eventBus: this.eventBus,
+      liveEmbeddings: mode === "live"
     });
 
     this.discoveryCtrl = new DiscoveryController({
@@ -152,7 +154,9 @@ export class CinderApp {
       attendeeRepo: this.attendeeRepo,
       esClient: this.esClient,
       eventBus: this.eventBus,
-      facilitatorService: this.facilitatorService
+      facilitatorService: this.facilitatorService,
+      interactionRepo: this.interactionRepo,
+      nextSocialSlot: (eventId) => this.facilitatorCtrl.nextSocialSlot(eventId)
     });
 
     this.commCtrl = new CommunicationController({
@@ -161,19 +165,25 @@ export class CinderApp {
       eventBus: this.eventBus,
       facilitatorService: this.facilitatorService,
       messageRepo: this.messageRepo,
-      interactionRepo: this.interactionRepo
+      interactionRepo: this.interactionRepo,
+      spaceRepo: this.spaceRepo,
+      agendaRepo: this.agendaRepo,
+      clock: this.clock,
+      defaultEventId: this.defaultEventId
     });
 
     this.facilitatorCtrl = new FacilitatorController({
       podRepo: this.podRepo,
       attendeeRepo: this.attendeeRepo,
       eventBus: this.eventBus,
-      facilitatorService: this.facilitatorService
+      facilitatorService: this.facilitatorService,
+      agendaRepo: this.agendaRepo,
+      promptRepo: this.promptRepo,
+      spaceRepo: this.spaceRepo,
+      announcementRepo: this.announcementRepo,
+      clock: this.clock,
+      defaultEventId: this.defaultEventId
     });
-
-    this.agenda = SEED_CONFERENCE_AGENDA;
-    this.venues = VENUE_LOCATIONS;
-    this.discussionPrompts = DISCUSSION_PROMPTS;
   }
 
   /**
@@ -184,7 +194,10 @@ export class CinderApp {
     if (this.initialized) return;
 
     if (this.mode === "live") {
-      const health = await this.esClient.checkHealth();
+      // The first request to a cloud cluster pays DNS + TLS (+ serverless wake-up) and can exceed the normal
+      // probe budget, so startup gets a longer timeout and one retry before falling back to offline data.
+      let health = await this.esClient.checkHealth(STARTUP_PROBE_TIMEOUT_MS);
+      if (!health.live) health = await this.esClient.checkHealth(STARTUP_PROBE_TIMEOUT_MS);
       if (!health.live) {
         this.fallbackReason = this.esClient.lastHealthError || "cluster unreachable";
         this.build("offline");
@@ -215,6 +228,7 @@ export class CinderApp {
     const esStatus = await this.esClient.getStatus();
     const attendees = await this.attendeeRepo.listAll();
     const pods = await this.podRepo.listAll();
+    const sessions = this.defaultEventId ? await this.agendaRepo.listByEvent(this.defaultEventId) : [];
 
     return {
       appName: "CINDER",
@@ -230,7 +244,7 @@ export class CinderApp {
       elasticsearch: esStatus,
       attendeeCount: attendees.length,
       podCount: pods.length,
-      agendaSessionsCount: this.agenda.length
+      agendaSessionsCount: sessions.length
     };
   }
 }

@@ -40,6 +40,7 @@ export class IAgendaRepository {
    * @param {string[]} [_options.sessionTypes] - e.g. ["talk", "workshop", "keynote", "panel"]
    * @param {number} [_options.afterMs] - only sessions starting after this time
    * @param {number} [_options.limit=3]
+   * @param {string} [_options.text] - topic text (e.g. the Pod theme) fused with the vector to keep results on topic
    * @returns {Promise<import("../agenda.mjs").Session[]>}
    */
   async findRelevant(_eventId, _vector, _options) {

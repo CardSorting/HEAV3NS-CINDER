@@ -33,25 +33,25 @@
 [x] Move the discovery reset logic from webServer into a DiscoveryController method so the UI layer holds no state
 [x] Move direct-message storage from the webServer directMessages map into CommunicationController and the MessageRepository
 [x] Move meetup pinning and RSVP logic from webServer routes into CommunicationController methods
-[ ] Change CheckInController to save registrations through the Elasticsearch repository and stop computing 32-dim embeddings in live mode
-[ ] Replace the hybridSearch implementation in live mode with an Elasticsearch RRF retriever combining BM25 on profile fields, kNN on the stored profile vector, and kNN on looking_for text via query_vector_builder
-[ ] Fetch stored vectors with _source exclude_vectors false wherever a stored embedding is reused as a kNN query
-[ ] Weight the looking_for retriever above profile similarity so discovery surfaces complementary attendees rather than lookalikes
-[ ] Exclude the requesting attendee and previously swiped attendees from discovery with filters inside every retriever
-[ ] Return the executed Elasticsearch query and per-retriever ranks from discovery so the UI shows the real query specification
-[ ] Update explainMatchRelevance to describe complementary matches using looking_for, discipline and shared interests from registration data
-[ ] Evaluate discovery quality on the demo event with a fixed set of attendees and tune retriever weights and rank window size
-[ ] Rewrite PodOrchestrationController candidate retrieval to use Elasticsearch kNN around the seed attendees' centroid filtered by eventId
-[ ] Enforce discipline diversity in pod composition using the registration discipline field and existing mutual matches as anchors
-[ ] Store the pod centroid vector and compositionMeta on cinder-pods and derive the pod name and theme from shared interests
-[ ] Replace SEED_CONFERENCE_AGENDA, VENUE_LOCATIONS and DISCUSSION_PROMPTS usage in CinderApp, FacilitatorController and AiFacilitatorEngine with the Elasticsearch repositories
-[ ] Make GET /api/agenda return sessions, meetup venues and prompts for the selected event in the existing response shape
-[ ] Resolve meetup locations in evaluateMeetupIntent by matching message text against cinder-spaces aliases for the event venue
-[ ] Resolve meetup times against the next lunch, break or networking session from the agenda and store pinnedMeetup.startsAt
-[ ] Replace the hard-coded 12:15 PM and Main Hall East Patio defaults in the facilitator and webServer with agenda and space lookups
-[ ] Select discussion prompts by kNN against the pod centroid filtered by phase
-[ ] Surface relevant upcoming talks for a pod by kNN against the pod centroid filtered by eventId, session type and the demo clock
-[ ] Deliver announcements to pods whose members are affected by the announced sessions or spaces when publishAt passes on the demo clock
+[x] Change CheckInController to save registrations through the Elasticsearch repository and stop computing 32-dim embeddings in live mode
+[x] Replace the hybridSearch implementation in live mode with an Elasticsearch RRF retriever combining BM25 on profile fields, kNN on the stored profile vector, and kNN on looking_for text via query_vector_builder
+[x] Fetch stored vectors with _source exclude_vectors false wherever a stored embedding is reused as a kNN query
+[x] Weight the looking_for retriever above profile similarity so discovery surfaces complementary attendees rather than lookalikes
+[x] Exclude the requesting attendee and previously swiped attendees from discovery with filters inside every retriever
+[x] Return the executed Elasticsearch query and per-retriever ranks from discovery so the UI shows the real query specification
+[x] Update explainMatchRelevance to describe complementary matches using looking_for, discipline and shared interests from registration data
+[x] Evaluate discovery quality on the demo event with a fixed set of attendees and tune retriever weights and rank window size
+[x] Rewrite PodOrchestrationController candidate retrieval to use Elasticsearch kNN around the seed attendees' centroid filtered by eventId
+[x] Enforce discipline diversity in pod composition using the registration discipline field and existing mutual matches as anchors
+[x] Store the pod centroid vector and compositionMeta on cinder-pods and derive the pod name and theme from shared interests
+[x] Replace SEED_CONFERENCE_AGENDA, VENUE_LOCATIONS and DISCUSSION_PROMPTS usage in CinderApp, FacilitatorController and AiFacilitatorEngine with the Elasticsearch repositories
+[x] Make GET /api/agenda return sessions, meetup venues and prompts for the selected event in the existing response shape
+[x] Resolve meetup locations in evaluateMeetupIntent by matching message text against cinder-spaces aliases for the event venue
+[x] Resolve meetup times against the next lunch, break or networking session from the agenda and store pinnedMeetup.startsAt
+[x] Replace the hard-coded 12:15 PM and Main Hall East Patio defaults in the facilitator and webServer with agenda and space lookups
+[x] Select discussion prompts by kNN against the pod centroid filtered by phase
+[x] Surface relevant upcoming talks for a pod by kNN against the pod centroid filtered by eventId, session type and the demo clock
+[x] Deliver announcements to pods whose members are affected by the announced sessions or spaces when publishAt passes on the demo clock
 [ ] Add a facilitator scheduler that triggers welcome, agenda reminders, meetup reminders and prompts from the demo clock
 [ ] Add an LLM facilitator mode using the Elasticsearch chat_completion inference endpoint that only states agenda, room and time facts retrieved from Elasticsearch
 [ ] Keep the template facilitator as the fallback when the LLM endpoint fails or times out

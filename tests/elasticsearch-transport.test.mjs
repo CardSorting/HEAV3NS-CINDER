@@ -209,4 +209,74 @@ describe("ElasticsearchClient live transport (mocked fetch)", () => {
     assert.strictEqual(JSON.parse(calls[0].body).input.length, 16);
     assert.strictEqual(JSON.parse(calls[0].body).input_type, "search");
   });
+
+  it("live hybridSearch excludes self and swiped attendees inside every retriever", async () => {
+    const { impl, calls } = mockFetch(() => ({ body: { took: 5, hits: { total: { value: 1 }, hits: [{ _id: "att_x", _score: 0.5, _source: { id: "att_x" },
+      _explanation: { description: "rrf score: [0.1] computed for initial ranks [3, 1, 2, -] with rankConstant: [60]" } }] } } }));
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, discoveryIndex: "cinder-registrations" });
+    es.isLiveCluster = true;
+    const res = await es.hybridSearch({
+      queryText: "kubernetes", queryVector: Array(1024).fill(0.1), excludeIds: ["att_me", "att_passed", "att_liked"],
+      limit: 10, eventId: "urn:ue:event:e1", lookingForText: "backend engineers", explain: true
+    });
+    assert.strictEqual(calls[0].path, "/cinder-registrations/_search");
+    const inner = JSON.parse(calls[0].body).retriever.rrf.retrievers.map((r) => r.retriever);
+    assert.strictEqual(inner.length, 4);
+    for (const r of inner) {
+      const bool = r.standard ? r.standard.query.bool : r.knn.filter.bool;
+      assert.deepStrictEqual(bool.must_not, [{ ids: { values: ["att_me", "att_passed", "att_liked"] } }]);
+      assert.deepStrictEqual(bool.filter, [{ term: { eventId: "urn:ue:event:e1" } }]);
+    }
+    assert.strictEqual(res.engine, "elasticsearch");
+    assert.strictEqual(res.hits[0].id, "att_x");
+    assert.strictEqual(JSON.parse(calls[0].body).explain, true);
+    assert.deepStrictEqual(res.hits[0].retrieverRanks, { bm25: 3, profile_knn: 1, looking_for_knn: 2, looking_for_bm25: null });
+    assert.strictEqual(res.hits[0].bm25Rank, 3);
+    assert.strictEqual(res.hits[0].knnRank, 1);
+    assert.strictEqual(res.querySpec.explain, true, "querySpec is the executed request");
+    assert.deepStrictEqual(res.querySpec.retrievers, ["bm25", "profile_knn", "looking_for_knn", "looking_for_bm25"]);
+  });
+
+  it("hybridSearch stays on the embedded engine without an event or when the cluster is down", async () => {
+    const { impl, calls } = mockFetch(() => ({ body: {} }));
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, discoveryIndex: "cinder-registrations" });
+    await es.hybridSearch({ queryText: "x", queryVector: [], excludeIds: [], limit: 5, eventId: "e1" });
+    es.isLiveCluster = true;
+    await es.hybridSearch({ queryText: "x", queryVector: [], excludeIds: [], limit: 5 });
+    assert.strictEqual(calls.length, 0, "no cluster requests");
+  });
+
+  it("raises a typed timeout when the response body is slower than the timeout", async () => {
+    const impl = async (url, init) => {
+      const body = new ReadableStream({ start(controller) {
+        init.signal.addEventListener("abort", () => controller.error(init.signal.reason));
+      } });
+      return new Response(body, { status: 200 });
+    };
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, timeoutMs: 20 });
+    const keepAlive = setInterval(() => {}, 1000);
+    try {
+      await assert.rejects(() => es.count("x"), { name: "ElasticsearchError", type: "timeout" });
+    } finally {
+      clearInterval(keepAlive);
+    }
+  });
+
+  it("only asks Elasticsearch to explain discovery when requested", async () => {
+    const { impl, calls } = mockFetch(() => ({ body: { took: 1, hits: { total: { value: 0 }, hits: [] } } }));
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, discoveryIndex: "cinder-registrations" });
+    es.isLiveCluster = true;
+    const res = await es.hybridSearch({ queryText: "x", excludeIds: [], limit: 5, eventId: "e1" });
+    assert.strictEqual(JSON.parse(calls[0].body).explain, undefined);
+    assert.strictEqual(res.querySpec.explain, undefined);
+  });
+
+  it("live hybridSearch ignores query vectors that do not match the index dimensions", async () => {
+    const { impl, calls } = mockFetch(() => ({ body: { took: 1, hits: { total: { value: 0 }, hits: [] } } }));
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, discoveryIndex: "cinder-registrations" });
+    es.isLiveCluster = true;
+    await es.hybridSearch({ queryText: "platform", queryVector: Array(32).fill(0.1), excludeIds: [], limit: 5, eventId: "e1" });
+    const body = JSON.parse(calls[0].body);
+    assert.ok(body.retriever.standard, "only BM25 runs: the 32-dim hashed vector is not sent to a 1024-dim field");
+  });
 });

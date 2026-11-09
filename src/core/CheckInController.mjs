@@ -14,11 +14,15 @@ export class CheckInController {
    * @param {import("../domain/interfaces/IAttendeeRepository.mjs").IAttendeeRepository} params.attendeeRepo
    * @param {import("../domain/interfaces/IElasticsearchClient.mjs").IElasticsearchClient} params.esClient
    * @param {import("../domain/interfaces/IEventBus.mjs").IEventBus} params.eventBus
+   * @param {boolean} [params.liveEmbeddings=false] - true when registrations live in Elasticsearch: the
+   *   index's ingest pipeline computes the 1024-dim model embedding, so no 32-dim hashed vector is
+   *   computed and the embedded search engine is not fed.
    */
-  constructor({ attendeeRepo, esClient, eventBus }) {
+  constructor({ attendeeRepo, esClient, eventBus, liveEmbeddings = false }) {
     this.attendeeRepo = attendeeRepo;
     this.esClient = esClient;
     this.eventBus = eventBus;
+    this.liveEmbeddings = liveEmbeddings;
   }
 
   /**
@@ -28,6 +32,16 @@ export class CheckInController {
    */
   async checkIn(profile) {
     const id = profile.id || generatePrefixedId("att");
+
+    if (this.liveEmbeddings) {
+      // Live: save the registration; cinder-embed-registration embeds it at 1024 dims on write.
+      const { embedding: _clientEmbedding, ...rest } = profile;
+      const attendee = new Attendee({ ...rest, id, embedding: [] });
+      await this.attendeeRepo.save(attendee);
+      this.eventBus.publish("attendee.checked_in", attendee.toJSON());
+      return attendee;
+    }
+
     const searchableSummary = [
       profile.name,
       profile.title,

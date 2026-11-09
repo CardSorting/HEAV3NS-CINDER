@@ -31,6 +31,7 @@ python3 elasticsearch/cinder/generate.py build     # generate, embed, bulk-load 
 python3 elasticsearch/cinder/generate.py reset     # delete synthetic:true docs from the reference indices
 python3 elasticsearch/cinder/verify.py [eventId]   # smoke-test the app's queries
 python3 elasticsearch/cinder/compat_check.py [eventId]   # run after pulling src/ changes
+npm run eval:discovery [-- --event <id> --n 40 --quick]  # compare live discovery tunings (read-only)
 ```
 
 ## Indices

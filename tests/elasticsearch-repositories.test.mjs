@@ -13,6 +13,7 @@ import { ElasticsearchAgendaRepository, fromSessionDoc } from "../src/infrastruc
 import { ElasticsearchSpaceRepository } from "../src/infrastructure/ElasticsearchSpaceRepository.mjs";
 import { ElasticsearchAnnouncementRepository } from "../src/infrastructure/ElasticsearchAnnouncementRepository.mjs";
 import { ElasticsearchPromptRepository } from "../src/infrastructure/ElasticsearchPromptRepository.mjs";
+import { buildDiscoveryQuery, parseRetrieverRanks } from "../src/infrastructure/discoveryRetriever.mjs";
 
 const EV = "urn:ue:event:devsummit-2026";
 const MAPPINGS = JSON.parse(readFileSync(new URL("../elasticsearch/cinder/indices.json", import.meta.url), "utf8"));
@@ -274,3 +275,88 @@ describe("ElasticsearchAnnouncementRepository and ElasticsearchPromptRepository"
     assert.deepStrictEqual(es.of("search")[0].body.knn.filter, { term: { phase: "deep-dive" } });
   });
 });
+
+describe("Live discovery retriever (buildDiscoveryQuery)", () => {
+  const base = { eventId: EV, queryText: "Kubernetes eBPF", lookingForText: "observability engineers", embedModel: ".m", excludeIds: ["att_me", "att_seen"], limit: 5 };
+  const inner = (body) => body.retriever.rrf.retrievers.map((r) => r.retriever);
+
+  it("fuses BM25, profile kNN and the looking_for signals with weighted RRF", () => {
+    const { body, retrievers, weights } = buildDiscoveryQuery({ ...base, profileVector: vec() });
+    assert.deepStrictEqual(retrievers, ["bm25", "profile_knn", "looking_for_knn", "looking_for_bm25"]);
+    assert.deepStrictEqual(body.retriever.rrf.retrievers.map((r) => r.weight), [1, 1, 3, 3]);
+    assert.deepStrictEqual(weights, { bm25: 1, profile_knn: 1, looking_for_knn: 3, looking_for_bm25: 3 });
+    const [, profile, lfKnn, lfBm25] = inner(body);
+    assert.strictEqual(profile.knn.query_vector.length, 1024);
+    assert.deepStrictEqual(lfKnn.knn.query_vector_builder, { text_embedding: { model_id: ".m", model_text: "observability engineers" } });
+    assert.strictEqual(lfBm25.standard.query.bool.should[0].multi_match.query, "observability engineers");
+    assert.ok(lfBm25.standard.query.bool.should[0].multi_match.fields.includes("title^3"));
+    assert.strictEqual(body.size, 5);
+    assert.deepStrictEqual(body._source.excludes, ["searchText", "embedding"]);
+  });
+
+  it("weights the looking_for signals above profile similarity, and accepts overrides", () => {
+    const { weights } = buildDiscoveryQuery({ ...base, profileVector: vec() });
+    assert.ok(weights.looking_for_knn > weights.profile_knn && weights.looking_for_bm25 > weights.bm25);
+    const custom = buildDiscoveryQuery({ ...base, profileVector: vec(), weights: { looking_for_knn: 5 } });
+    assert.deepStrictEqual(custom.body.retriever.rrf.retrievers.map((r) => r.weight), [1, 1, 5, 3]);
+  });
+
+  it("filters every retriever to the event and excludes self and swiped attendees", () => {
+    const { body } = buildDiscoveryQuery({ ...base, profileVector: vec() });
+    const [bm25, profile, lfKnn, lfBm25] = inner(body);
+    for (const f of [bm25.standard.query.bool, profile.knn.filter.bool, lfKnn.knn.filter.bool, lfBm25.standard.query.bool]) {
+      assert.deepStrictEqual(f.filter, [{ term: { eventId: EV } }]);
+      assert.deepStrictEqual(f.must_not, [{ ids: { values: ["att_me", "att_seen"] } }]);
+    }
+  });
+
+  it("drops retrievers without input and requires an event", () => {
+    assert.deepStrictEqual(buildDiscoveryQuery({ ...base, profileVector: [] }).retrievers, ["bm25", "looking_for_knn", "looking_for_bm25"]);
+    const single = buildDiscoveryQuery({ ...base, queryText: "", lookingForText: "", profileVector: vec() });
+    assert.ok(single.body.retriever.knn, "a single retriever is used directly, without RRF");
+    assert.throws(() => buildDiscoveryQuery({ ...base, eventId: null }), /requires an eventId/);
+    assert.throws(() => buildDiscoveryQuery({ ...base, queryText: "", lookingForText: "" }), /needs query text/);
+  });
+});
+
+describe("parseRetrieverRanks", () => {
+  const names = ["bm25", "profile_knn", "looking_for_knn", "looking_for_bm25"];
+  it("maps RRF explain initial ranks to retriever names", () => {
+    const explanation = { description: "rrf score: [0.0999] computed for initial ranks [27, 19, 2, 13] with rankConstant: [60] as sum of ..." };
+    assert.deepStrictEqual(parseRetrieverRanks(explanation, names), { bm25: 27, profile_knn: 19, looking_for_knn: 2, looking_for_bm25: 13 });
+  });
+  it("returns null for retrievers that did not return the hit and for missing explanations", () => {
+    assert.deepStrictEqual(parseRetrieverRanks({ description: "computed for initial ranks [-, 4, -, 1] with" }, names),
+      { bm25: null, profile_knn: 4, looking_for_knn: null, looking_for_bm25: 1 });
+    assert.deepStrictEqual(parseRetrieverRanks(undefined, ["bm25"]), { bm25: null });
+  });
+});
+
+describe("ElasticsearchPromptRepository topic fusion", () => {
+  it("fuses the vector with the topic text (weights 1 / 2) when an embed model is set", async () => {
+    const es = fakeClient({ search: () => [{ id: "p", text: "Q?", phase: "deep-dive", topics: [] }] });
+    const repo = new ElasticsearchPromptRepository({ esClient: es, index: "cinder-prompts", embedModel: ".m" });
+    await repo.findForVector(vec(), { phase: "deep-dive", limit: 3, text: "Runbook Automation & SLOs" });
+    const rrf = es.of("search")[0].body.retriever.rrf;
+    assert.deepStrictEqual(rrf.retrievers.map((r) => r.weight), [1, 2]);
+    assert.strictEqual(rrf.retrievers[1].retriever.knn.query_vector_builder.text_embedding.model_text, "Discussion questions about Runbook Automation & SLOs");
+    assert.ok(rrf.retrievers.every((r) => r.retriever.knn.filter.term.phase === "deep-dive"));
+    await repo.findForVector(vec(), { phase: "deep-dive" });
+    assert.ok(es.of("search")[1].body.knn, "vector-only kNN without text");
+  });
+});
+
+describe("ElasticsearchAgendaRepository relevant talks", () => {
+  it("fuses the pod centroid with its theme text (weights 1 / 2), upcoming content sessions only", async () => {
+    const es = fakeClient({ search: () => [] });
+    const repo = new ElasticsearchAgendaRepository({ esClient: es, index: "cinder-sessions", embedModel: ".m" });
+    await repo.findRelevant(EV, vec(), { afterMs: 5, limit: 3, text: "Runbook Automation & SLOs" });
+    const rrf = es.of("search")[0].body.retriever.rrf;
+    assert.deepStrictEqual(rrf.retrievers.map((r) => r.weight), [1, 2]);
+    assert.strictEqual(rrf.retrievers[1].retriever.knn.query_vector_builder.text_embedding.model_text, "Talks about Runbook Automation & SLOs");
+    const filters = rrf.retrievers[0].retriever.knn.filter.bool.filter;
+    assert.deepStrictEqual(filters[0], { term: { eventId: EV } });
+    assert.deepStrictEqual(filters[2], { range: { startDate: { gte: 5, format: "epoch_millis" } } });
+  });
+});
+

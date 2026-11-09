@@ -31,9 +31,11 @@ export class DiscoveryController {
    * @param {number} [limit=10]
    * @param {Object} [options]
    * @param {string} [options.eventId] - only suggest attendees of this event (defaults to the source's event)
+   * @param {boolean} [options.explain=false] - include each candidate's rank in every live retriever (slower)
    */
-  async getDiscoveryFeed(attendeeId, limit = 10, { eventId } = {}) {
-    const source = await this.attendeeRepo.findById(attendeeId);
+  async getDiscoveryFeed(attendeeId, limit = 10, { eventId, explain = false } = {}) {
+    // The stored profile vector is reused as the kNN query vector, so load it explicitly.
+    const source = await this.attendeeRepo.findById(attendeeId, { includeVectors: true });
     if (!source) {
       throw new Error(`Attendee ${attendeeId} not found`);
     }
@@ -49,12 +51,15 @@ export class DiscoveryController {
       source.challenges
     ].join(" ");
 
-    // The embedded engine holds every event's attendees: over-fetch, then keep the same event only.
+    // Both engines scope by event themselves, so ask for exactly `limit` (live explain cost grows with hits).
     const esResult = await this.esClient.hybridSearch({
       queryText,
       queryVector: source.embedding,
       excludeIds: excludedIds,
-      limit: scopeEventId ? Math.max(limit * 4, 50) : limit
+      limit,
+      eventId: scopeEventId || undefined,
+      lookingForText: source.looking_for,
+      explain
     });
     const scopedHits = esResult.hits
       .filter((hit) => !scopeEventId || hit.source?.eventId === scopeEventId)
@@ -66,7 +71,8 @@ export class DiscoveryController {
       const explanation = explainMatchRelevance(source, candidateProfile, {
         bm25Score: hit.bm25Score,
         knnScore: hit.knnScore,
-        rrfScore: hit.rrfScore
+        rrfScore: hit.rrfScore,
+        retrieverRanks: hit.retrieverRanks
       });
 
       candidates.push({
@@ -76,6 +82,7 @@ export class DiscoveryController {
         knnScore: hit.knnScore,
         bm25Rank: hit.bm25Rank,
         knnRank: hit.knnRank,
+        retrieverRanks: hit.retrieverRanks || null,
         explanation
       });
     }
@@ -84,6 +91,7 @@ export class DiscoveryController {
       targetAttendeeId: attendeeId,
       candidates,
       esQuerySpec: esResult.querySpec,
+      engine: esResult.engine || "embedded",
       tookMs: esResult.tookMs,
       totalFound: esResult.totalHits
     };
