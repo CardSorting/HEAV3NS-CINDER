@@ -278,33 +278,43 @@ describe("ElasticsearchAnnouncementRepository and ElasticsearchPromptRepository"
 
 describe("Live discovery retriever (buildDiscoveryQuery)", () => {
   const base = { eventId: EV, queryText: "Kubernetes eBPF", lookingForText: "observability engineers", embedModel: ".m", excludeIds: ["att_me", "att_seen"], limit: 5 };
+  const inner = (body) => body.retriever.rrf.retrievers.map((r) => r.retriever);
 
-  it("fuses BM25, profile kNN and looking_for kNN with RRF", () => {
-    const { body, retrievers } = buildDiscoveryQuery({ ...base, profileVector: vec() });
-    assert.deepStrictEqual(retrievers, ["bm25", "profile_knn", "looking_for_knn"]);
-    const rrf = body.retriever.rrf;
-    assert.strictEqual(rrf.retrievers.length, 3);
-    assert.strictEqual(rrf.retrievers[1].knn.query_vector.length, 1024);
-    assert.deepStrictEqual(rrf.retrievers[2].knn.query_vector_builder, { text_embedding: { model_id: ".m", model_text: "observability engineers" } });
+  it("fuses BM25, profile kNN and the looking_for signals with weighted RRF", () => {
+    const { body, retrievers, weights } = buildDiscoveryQuery({ ...base, profileVector: vec() });
+    assert.deepStrictEqual(retrievers, ["bm25", "profile_knn", "looking_for_knn", "looking_for_bm25"]);
+    assert.deepStrictEqual(body.retriever.rrf.retrievers.map((r) => r.weight), [1, 1, 3, 2]);
+    assert.deepStrictEqual(weights, { bm25: 1, profile_knn: 1, looking_for_knn: 3, looking_for_bm25: 2 });
+    const [, profile, lfKnn, lfBm25] = inner(body);
+    assert.strictEqual(profile.knn.query_vector.length, 1024);
+    assert.deepStrictEqual(lfKnn.knn.query_vector_builder, { text_embedding: { model_id: ".m", model_text: "observability engineers" } });
+    assert.strictEqual(lfBm25.standard.query.bool.should[0].multi_match.query, "observability engineers");
+    assert.ok(lfBm25.standard.query.bool.should[0].multi_match.fields.includes("title^3"));
     assert.strictEqual(body.size, 5);
     assert.deepStrictEqual(body._source.excludes, ["searchText", "embedding"]);
   });
 
+  it("weights the looking_for signals above profile similarity, and accepts overrides", () => {
+    const { weights } = buildDiscoveryQuery({ ...base, profileVector: vec() });
+    assert.ok(weights.looking_for_knn > weights.profile_knn && weights.looking_for_bm25 > weights.bm25);
+    const custom = buildDiscoveryQuery({ ...base, profileVector: vec(), weights: { looking_for_knn: 5 } });
+    assert.deepStrictEqual(custom.body.retriever.rrf.retrievers.map((r) => r.weight), [1, 1, 5, 2]);
+  });
+
   it("filters every retriever to the event and excludes self and swiped attendees", () => {
     const { body } = buildDiscoveryQuery({ ...base, profileVector: vec() });
-    const [bm25, profile, lookingFor] = body.retriever.rrf.retrievers;
-    for (const f of [bm25.standard.query.bool, profile.knn.filter.bool, lookingFor.knn.filter.bool]) {
+    const [bm25, profile, lfKnn, lfBm25] = inner(body);
+    for (const f of [bm25.standard.query.bool, profile.knn.filter.bool, lfKnn.knn.filter.bool, lfBm25.standard.query.bool]) {
       assert.deepStrictEqual(f.filter, [{ term: { eventId: EV } }]);
       assert.deepStrictEqual(f.must_not, [{ ids: { values: ["att_me", "att_seen"] } }]);
     }
   });
 
   it("drops retrievers without input and requires an event", () => {
-    assert.deepStrictEqual(buildDiscoveryQuery({ ...base, profileVector: [] }).retrievers, ["bm25", "looking_for_knn"]);
-    const single = buildDiscoveryQuery({ ...base, queryText: "", lookingForText: "" , profileVector: vec() });
+    assert.deepStrictEqual(buildDiscoveryQuery({ ...base, profileVector: [] }).retrievers, ["bm25", "looking_for_knn", "looking_for_bm25"]);
+    const single = buildDiscoveryQuery({ ...base, queryText: "", lookingForText: "", profileVector: vec() });
     assert.ok(single.body.retriever.knn, "a single retriever is used directly, without RRF");
     assert.throws(() => buildDiscoveryQuery({ ...base, eventId: null }), /requires an eventId/);
     assert.throws(() => buildDiscoveryQuery({ ...base, queryText: "", lookingForText: "" }), /needs query text/);
   });
 });
-

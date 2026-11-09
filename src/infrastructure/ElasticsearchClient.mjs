@@ -316,7 +316,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
 
   /** Live discovery: one Elasticsearch RRF retriever request (see discoveryRetriever.mjs). */
   async liveHybridSearch({ queryText, queryVector, excludeIds = [], limit = 10, eventId, lookingForText }) {
-    const { body, retrievers } = buildDiscoveryQuery({
+    const { body, retrievers, weights } = buildDiscoveryQuery({
       eventId, queryText, profileVector: queryVector, lookingForText, excludeIds, limit, embedModel: this.embedModel
     });
     const res = await this.search(this.discoveryIndex, body);
@@ -326,7 +326,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
       })),
       totalHits: res.total,
       tookMs: res.tookMs,
-      querySpec: { index: this.discoveryIndex, retrievers, ...summarizeVectors(body) },
+      querySpec: { index: this.discoveryIndex, retrievers, weights, ...summarizeVectors(body) },
       engine: "elasticsearch"
     };
   }
