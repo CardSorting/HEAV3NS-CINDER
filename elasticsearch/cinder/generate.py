@@ -108,13 +108,13 @@ PIPELINES = {
         "processors": [{"script": {"lang": "painless", "source": """
 if (ctx.searchText == null) {
   List p = new ArrayList();
-  if (ctx.title != null) p.add(ctx.title + (ctx.company != null ? ' at ' + ctx.company : '') + '.');
-  if (ctx.bio != null) p.add(ctx.bio);
+  if (ctx.title != null && ctx.title != '') p.add(ctx.title + (ctx.company != null && ctx.company != '' ? ' at ' + ctx.company : '') + '.');
+  if (ctx.bio != null && ctx.bio != '') p.add(ctx.bio);
   if (ctx.interests != null && !ctx.interests.isEmpty()) p.add('Interests: ' + String.join(', ', ctx.interests) + '.');
   if (ctx.expertise != null && !ctx.expertise.isEmpty()) p.add('Expertise: ' + String.join(', ', ctx.expertise) + '.');
-  if (ctx.projects != null) p.add('Working on: ' + ctx.projects);
-  if (ctx.challenges != null) p.add('Challenge: ' + ctx.challenges);
-  if (ctx.looking_for != null) p.add('Looking for: ' + ctx.looking_for);
+  if (ctx.projects != null && ctx.projects != '') p.add('Working on: ' + ctx.projects);
+  if (ctx.challenges != null && ctx.challenges != '') p.add('Challenge: ' + ctx.challenges);
+  if (ctx.looking_for != null && ctx.looking_for != '') p.add('Looking for: ' + ctx.looking_for);
   if (ctx.topics != null && !ctx.topics.isEmpty()) p.add('Topics: ' + String.join(', ', ctx.topics) + '.');
   ctx.searchText = String.join(' ', p);
 }"""}}, INFER(), DROP_MODEL_ID()],
@@ -124,8 +124,8 @@ if (ctx.searchText == null) {
         "processors": [{"script": {"lang": "painless", "source": """
 if (ctx.searchText == null) {
   List p = new ArrayList(); p.add(ctx.title + '.');
-  if (ctx.abstract != null) p.add(ctx.abstract);
-  if (ctx.track != null) p.add('Track: ' + ctx.track + '.');
+  if (ctx.abstract != null && ctx.abstract != '') p.add(ctx.abstract);
+  if (ctx.track != null && ctx.track != '') p.add('Track: ' + ctx.track + '.');
   if (ctx.tags != null && !ctx.tags.isEmpty()) p.add('Tags: ' + String.join(', ', ctx.tags) + '.');
   ctx.searchText = String.join(' ', p);
 }"""}}, INFER(), DROP_MODEL_ID()],
