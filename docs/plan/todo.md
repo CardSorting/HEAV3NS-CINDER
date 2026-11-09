@@ -52,14 +52,17 @@
 [x] Select discussion prompts by kNN against the pod centroid filtered by phase
 [x] Surface relevant upcoming talks for a pod by kNN against the pod centroid filtered by eventId, session type and the demo clock
 [x] Deliver announcements to pods whose members are affected by the announced sessions or spaces when publishAt passes on the demo clock
-[ ] Add a facilitator scheduler that triggers welcome, agenda reminders, meetup reminders and prompts from the demo clock
-[ ] Add an LLM facilitator mode using the Elasticsearch chat_completion inference endpoint that only states agenda, room and time facts retrieved from Elasticsearch
-[ ] Keep the template facilitator as the fallback when the LLM endpoint fails or times out
 [ ] Add a seeding command to elasticsearch/cinder that loads the five seed attendees into the demo event with their existing att_ ids
 [ ] Verify the seed attendees produce the scripted story, including the Alex Chen and Maya Lin mutual match, against live discovery
 [ ] Update ScenarioRunner to run the ten-step demonstration against the demo event in live mode and in offline mode
 [ ] Update existing tests for eventId scoping and repository injection and confirm npm test passes
 [ ] Run elasticsearch/cinder/compat_check.py and npm run check and fix any findings
+[ ] Update README.md, docs/GETTING_STARTED.md and docs/OPERATIONS.md with .env setup, data tooling commands and live mode
+[ ] Rehearse the full ten-step demonstration against the live cluster and confirm offline fallback works with the network disabled
+[ ] Merge the integration branch into master and tag the release
+[ ] Add a facilitator scheduler that triggers welcome, agenda reminders, meetup reminders and prompts from the demo clock
+[ ] Add an LLM facilitator mode using the Elasticsearch chat_completion inference endpoint that only states agenda, room and time facts retrieved from Elasticsearch
+[ ] Keep the template facilitator as the fallback when the LLM endpoint fails or times out
 [ ] Add the event picker screen to the web UI and store the selected event for the session
 [ ] Update the check-in form to submit to the selected event and show the new attendee in discovery
 [ ] Update discovery cards to show avatar, title, company, discipline, complementary match explanation and the executed query
@@ -83,11 +86,8 @@
 [ ] Write an ADR for the live serverless Elasticsearch adapter with 1024-dim jina embeddings, superseding the 32-dim embedding decisions in ADR 0002 and ADR 0005
 [ ] Write an ADR for event-scoped data and the people and registrations split
 [ ] Update docs/architecture/current.md, docs/api/cli.md, docs/api/public-api.md, docs/PROJECT_MAP.md and docs/CODE_TO_DOC_MAP.md for the new modules and routes
-[ ] Update README.md, docs/GETTING_STARTED.md and docs/OPERATIONS.md with .env setup, data tooling commands and live mode
 [ ] Update docs/GLOSSARY.md with Event, Registration, Space, Announcement and Demo Clock
 [ ] Update docs/playbooks/elasticsearch-cluster-failover.md and docs/kb/symptom-diagnosis-matrix.md with the serverless and embedding gotchas
 [ ] Update CHANGELOG.md and VALIDATION_REPORT.md and confirm npm run verify passes
-[ ] Rehearse the full ten-step demonstration against the live cluster and confirm offline fallback works with the network disabled
 [ ] Record the demonstration with bin/record-live-journey.mjs and capture screens with bin/capture-screens.mjs
-[ ] Merge the integration branch into master and tag the release
 [ ] Submit the hackathon entry with the repository link, demo recording and setup instructions
