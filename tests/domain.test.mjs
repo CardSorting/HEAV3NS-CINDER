@@ -7,7 +7,7 @@ import { Attendee } from "../src/domain/attendee.mjs";
 import { Pod } from "../src/domain/pod.mjs";
 import { Message } from "../src/domain/message.mjs";
 import { Match } from "../src/domain/match.mjs";
-import { Session } from "../src/domain/agenda.mjs";
+import { Session, SOCIAL_SESSION_TYPES } from "../src/domain/agenda.mjs";
 import { explainMatchRelevance } from "../src/domain/relevanceScore.mjs";
 import { ConferenceEvent, SELECTABLE_CATEGORIES } from "../src/domain/conferenceEvent.mjs";
 import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
@@ -197,5 +197,33 @@ describe("ConferenceEvent entity", () => {
     assert.throws(() => new ConferenceEvent({ ...props, startDate: "nope" }), /valid ISO startDate/);
     assert.throws(() => new ConferenceEvent({ ...props, endDate: "2026-12-01T00:00:00Z" }), /must not be before/);
     assert.throws(() => new ConferenceEvent({ ...props, timezone: "" }), /IANA timezone/);
+  });
+});
+
+describe("Session absolute timing", () => {
+  const seed = { id: "s1", title: "Lunch & Pod Meetups", startTime: "12:15", endTime: "13:30", room: "Exhibit Hall" };
+  const full = { ...seed, startDate: "2026-12-23T12:15:00-07:00", endDate: "2026-12-23T13:30:00-07:00",
+    timezone: "America/Denver", sessionType: "lunch", spaceId: "space:salt-palace:exhibit-hall" };
+
+  it("keeps seed sessions without dates working", () => {
+    const s = new Session(seed);
+    assert.strictEqual(s.startsAtMs(), null);
+    assert.strictEqual(s.isSocialSlot(), false);
+    assert.strictEqual(s.toJSON().startDate, null);
+  });
+
+  it("carries absolute times, type and space and round-trips", () => {
+    const s = new Session(full);
+    assert.strictEqual(s.startsAtMs(), Date.parse("2026-12-23T19:15:00Z"));
+    assert.strictEqual(s.endsAtMs() - s.startsAtMs(), 75 * 60000);
+    assert.strictEqual(s.isSocialSlot(), true);
+    assert.deepStrictEqual(new Session(s.toJSON()).toJSON(), s.toJSON());
+    assert.ok(SOCIAL_SESSION_TYPES.includes("networking"));
+  });
+
+  it("validates absolute times", () => {
+    assert.throws(() => new Session({ ...seed, startDate: full.startDate }), /provided together/);
+    assert.throws(() => new Session({ ...full, endDate: "garbage" }), /valid ISO-8601/);
+    assert.throws(() => new Session({ ...full, endDate: "2026-12-23T11:00:00-07:00" }), /must not be before/);
   });
 });

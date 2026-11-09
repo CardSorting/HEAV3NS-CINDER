@@ -59,7 +59,9 @@ def from_session(s):
     """cinder-sessions doc -> the Session shape served on /api/agenda (times are local to the event)."""
     return {"id": s["id"], "title": s["title"], "speakers": s.get("speakerNames", []),
             "startTime": s["startDate"][11:16], "endTime": s["endDate"][11:16], "room": s["roomName"],
-            "track": s.get("track") or s["sessionType"].title(), "description": s.get("abstract", "")}
+            "track": s.get("track") or s["sessionType"].title(), "description": s.get("abstract", ""),
+            "startDate": s["startDate"], "endDate": s["endDate"], "timezone": s.get("timezone"),
+            "sessionType": s["sessionType"], "spaceId": s.get("spaceId")}
 
 
 def from_space(sp):
