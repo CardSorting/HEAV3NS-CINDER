@@ -217,7 +217,7 @@ describe("ElasticsearchClient live transport (mocked fetch)", () => {
     es.isLiveCluster = true;
     const res = await es.hybridSearch({
       queryText: "kubernetes", queryVector: Array(1024).fill(0.1), excludeIds: ["att_me", "att_passed", "att_liked"],
-      limit: 10, eventId: "urn:ue:event:e1", lookingForText: "backend engineers"
+      limit: 10, eventId: "urn:ue:event:e1", lookingForText: "backend engineers", explain: true
     });
     assert.strictEqual(calls[0].path, "/cinder-registrations/_search");
     const inner = JSON.parse(calls[0].body).retriever.rrf.retrievers.map((r) => r.retriever);
@@ -244,5 +244,30 @@ describe("ElasticsearchClient live transport (mocked fetch)", () => {
     es.isLiveCluster = true;
     await es.hybridSearch({ queryText: "x", queryVector: [], excludeIds: [], limit: 5 });
     assert.strictEqual(calls.length, 0, "no cluster requests");
+  });
+
+  it("raises a typed timeout when the response body is slower than the timeout", async () => {
+    const impl = async (url, init) => {
+      const body = new ReadableStream({ start(controller) {
+        init.signal.addEventListener("abort", () => controller.error(init.signal.reason));
+      } });
+      return new Response(body, { status: 200 });
+    };
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, timeoutMs: 20 });
+    const keepAlive = setInterval(() => {}, 1000);
+    try {
+      await assert.rejects(() => es.count("x"), { name: "ElasticsearchError", type: "timeout" });
+    } finally {
+      clearInterval(keepAlive);
+    }
+  });
+
+  it("only asks Elasticsearch to explain discovery when requested", async () => {
+    const { impl, calls } = mockFetch(() => ({ body: { took: 1, hits: { total: { value: 0 }, hits: [] } } }));
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, discoveryIndex: "cinder-registrations" });
+    es.isLiveCluster = true;
+    const res = await es.hybridSearch({ queryText: "x", excludeIds: [], limit: 5, eventId: "e1" });
+    assert.strictEqual(JSON.parse(calls[0].body).explain, undefined);
+    assert.strictEqual(res.querySpec.explain, undefined);
   });
 });

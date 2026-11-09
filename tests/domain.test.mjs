@@ -321,3 +321,37 @@ describe("Repository contracts for event-scoped data", () => {
     });
   }
 });
+
+describe("Complementary match explanations", () => {
+  const amara = { id: "a", name: "Amara", title: "SRE Lead", discipline: "sre", interests: ["Runbook Automation", "SLOs"], expertise: ["Python", "Prometheus"],
+    looking_for: "Looking to meet backend engineers who design APIs and systems that survive scale, especially around Runbook Automation." };
+  const ingrid = { id: "b", name: "Ingrid", title: "Backend Engineer", discipline: "backend", interests: ["API Design", "Runbook Automation"], expertise: ["Go", "gRPC", "PostgreSQL"],
+    looking_for: "Hoping to connect with SREs who have been paged at 3 AM and fixed the root cause." };
+  const mei = { id: "c", name: "Mei", title: "Senior SRE", discipline: "sre", interests: ["SLOs"], expertise: ["Prometheus"], looking_for: "Want to find platform engineers." };
+
+  it("leads with the fact that the candidate is who the attendee asked for, and detects mutual fit", () => {
+    const e = explainMatchRelevance(amara, ingrid, { retrieverRanks: { bm25: 40, profile_knn: 30, looking_for_knn: 2, looking_for_bm25: 1 } });
+    assert.strictEqual(e.answersLookingFor, true);
+    assert.strictEqual(e.mutualFit, true, "Ingrid is looking for SREs");
+    assert.strictEqual(e.headline, "Mutual fit: Backend Engineer you asked to meet");
+    assert.match(e.synergySummary, /Ingrid \(Backend Engineer\) fits what you're looking for\. You both work with Runbook Automation, and Ingrid adds Go, gRPC, PostgreSQL\. They're looking for someone like you too\./);
+    assert.strictEqual(e.reasons.length, 4);
+    assert.strictEqual(e.scorePercent, 99, "best live rank 1 -> 99");
+  });
+
+  it("does not treat generic role words or lookalikes as an answer to looking_for", () => {
+    const e = explainMatchRelevance(amara, mei, { retrieverRanks: { bm25: 12, profile_knn: 20, looking_for_knn: null } });
+    assert.strictEqual(e.answersLookingFor, false, "'engineers' alone does not make an SRE a backend engineer");
+    assert.strictEqual(e.mutualFit, false);
+    assert.strictEqual(e.headline, "Shared focus on SLOs");
+    assert.strictEqual(e.scorePercent, 88, "best rank 12 -> 88");
+  });
+
+  it("matches on expertise named in looking_for and keeps the old fields", () => {
+    const e = explainMatchRelevance({ ...mei, looking_for: "someone strong in gRPC and PostgreSQL" }, ingrid);
+    assert.strictEqual(e.answersLookingFor, true);
+    assert.deepStrictEqual(Object.keys(e).slice(0, 5), ["headline", "sharedInterests", "complementaryStrengths", "synergySummary", "scorePercent"]);
+    assert.strictEqual(e.scorePercent, 75, "no score information -> 75");
+  });
+});
+

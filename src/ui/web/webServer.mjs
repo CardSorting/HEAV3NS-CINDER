@@ -181,7 +181,8 @@ export class CinderWebServer {
       const attendeeId = url.searchParams.get("attendeeId") || "att_alex_chen";
       const limit = parseInt(url.searchParams.get("limit") || "10", 10);
       await this.attendeeIn(event, attendeeId);
-      const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, limit, { eventId: event.id });
+      const explain = /^(1|true)$/i.test(url.searchParams.get("explain") || "");
+      const feed = await this.app.discoveryCtrl.getDiscoveryFeed(attendeeId, limit, { eventId: event.id, explain });
       return this.sendJson(res, { eventId: event.id, ...feed });
     }
 

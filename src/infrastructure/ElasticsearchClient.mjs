@@ -60,8 +60,9 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * @param {number} [options.timeoutMs=5000] - Default per-request timeout
    * @param {string} [options.chatModel] - Chat-completion inference endpoint id
    * @param {typeof fetch} [options.fetchImpl] - Injectable fetch (tests)
-   * @param {boolean} [options.explainDiscovery=true] - ask Elasticsearch to explain discovery hits so each
-   *   candidate carries its rank in every retriever (adds some latency)
+   * @param {boolean} [options.explainDiscovery=false] - by default, ask Elasticsearch to explain discovery hits so
+   *   each candidate carries its rank in every retriever. Off by default: explain adds ~1.6–2.1s on serverless;
+   *   callers opt in per request with hybridSearch({ explain: true }).
    * @param {string|null} [options.discoveryIndex=null] - registrations index for live discovery; when set
    *   and the cluster is live, hybridSearch runs an Elasticsearch RRF retriever instead of the embedded engine
    * @param {boolean} [options.legacyAttendeeIndex=true] - create/mirror the old 32-dim `cinder_attendees`
@@ -83,7 +84,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     this.fetchImpl = options.fetchImpl || ((...args) => fetch(...args));
     this.legacyAttendeeIndex = options.legacyAttendeeIndex !== false;
     this.discoveryIndex = options.discoveryIndex || null;
-    this.explainDiscovery = options.explainDiscovery !== false;
+    this.explainDiscovery = options.explainDiscovery === true;
     this.isLiveCluster = false;
     this.clusterInfo = null;
 
@@ -144,7 +145,8 @@ export class ElasticsearchClient extends IElasticsearchClient {
     if (raw && res.ok) return res;
     if (res.status === 404 && allow404) return null;
 
-    const text = await res.text();
+    // The timeout signal also covers reading the body; a slow body must fail as a typed error too.
+    const text = await this.readBody(res, method, path);
     let parsed = null;
     try {
       parsed = text ? JSON.parse(text) : {};
@@ -172,6 +174,21 @@ export class ElasticsearchClient extends IElasticsearchClient {
       });
     }
     return parsed;
+  }
+
+  /** Reads a response body, mapping aborts/timeouts during the read to ElasticsearchError. */
+  async readBody(res, method, path) {
+    try {
+      return await res.text();
+    } catch (err) {
+      const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
+      const error = new ElasticsearchError(
+        timedOut ? `Elasticsearch ${method} ${path} timed out reading the response` : `Elasticsearch ${method} ${path} response failed: ${err?.message || err}`,
+        { status: res.status, type: timedOut ? "timeout" : "network_error", method, path }
+      );
+      this.recordConnectivityFailure(error);
+      throw error;
+    }
   }
 
   /**
@@ -311,6 +328,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * @param {number} [params.limit]
    * @param {string} [params.eventId] - live mode: event to search in (required live)
    * @param {string} [params.lookingForText] - live mode: requester's looking_for
+   * @param {boolean} [params.explain] - live mode: return per-retriever ranks (slower); defaults to explainDiscovery
    */
   async hybridSearch(params) {
     if (this.discoveryIndex && this.isLiveCluster && params.eventId) return this.liveHybridSearch(params);
@@ -318,11 +336,11 @@ export class ElasticsearchClient extends IElasticsearchClient {
   }
 
   /** Live discovery: one Elasticsearch RRF retriever request (see discoveryRetriever.mjs). */
-  async liveHybridSearch({ queryText, queryVector, excludeIds = [], limit = 10, eventId, lookingForText }) {
+  async liveHybridSearch({ queryText, queryVector, excludeIds = [], limit = 10, eventId, lookingForText, explain = this.explainDiscovery }) {
     const { body, retrievers, weights } = buildDiscoveryQuery({
       eventId, queryText, profileVector: queryVector, lookingForText, excludeIds, limit, embedModel: this.embedModel
     });
-    const executed = this.explainDiscovery ? { ...body, explain: true } : body;
+    const executed = explain ? { ...body, explain: true } : body;
     const res = await this.search(this.discoveryIndex, executed);
     const explanations = new Map((res.raw?.hits?.hits || []).map((h) => [h._id, h._explanation]));
     return {
@@ -354,8 +372,11 @@ export class ElasticsearchClient extends IElasticsearchClient {
     queryText,
     queryVector,
     excludeIds = [],
-    limit = 10
+    limit = 10,
+    eventId
   }) {
+    // Scope to one event when asked (the embedded index holds every event's attendees).
+    const inScope = (docEntry) => !eventId || docEntry.rawDoc?.eventId === eventId;
     const start = performance.now();
     const queryTerms = tokenizeText(queryText);
     const totalDocs = this.docs.size;
@@ -365,7 +386,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     // 1. BM25 Lexical Phase
     const bm25Candidates = [];
     for (const [id, docEntry] of this.docs.entries()) {
-      if (excludeSet.has(id)) continue;
+      if (excludeSet.has(id) || !inScope(docEntry)) continue;
       const score = computeBM25Score({
         queryTerms,
         docTermFreqs: docEntry.termFreqs,
@@ -381,7 +402,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     // 2. Dense Vector kNN Phase
     const knnCandidates = [];
     for (const [id, docEntry] of this.docs.entries()) {
-      if (excludeSet.has(id)) continue;
+      if (excludeSet.has(id) || !inScope(docEntry)) continue;
       const sim = cosineSimilarity(queryVector, docEntry.embedding);
       knnCandidates.push({ id, score: Number(sim.toFixed(4)), doc: docEntry.rawDoc });
     }
@@ -597,7 +618,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     const model = modelId || this.chatModel;
     const path = `/_inference/chat_completion/${encodeURIComponent(model)}/_stream`;
     const res = await this.request("POST", path, { body: { messages }, timeoutMs, raw: true });
-    const text = await res.text();
+    const text = await this.readBody(res, "POST", path);
     let content = "";
     for (const line of text.split(/\r?\n/)) {
       if (!line.startsWith("data:")) continue;
