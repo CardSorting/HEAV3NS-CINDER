@@ -14,36 +14,33 @@ export class DiscoveryController {
    * @param {import("../domain/interfaces/IAttendeeRepository.mjs").IAttendeeRepository} params.attendeeRepo
    * @param {import("../domain/interfaces/IElasticsearchClient.mjs").IElasticsearchClient} params.esClient
    * @param {import("../domain/interfaces/IEventBus.mjs").IEventBus} params.eventBus
+   * @param {import("../domain/interfaces/IInteractionRepository.mjs").IInteractionRepository} params.interactionRepo
+   *   Swipes and mutual matches (event-scoped)
    */
-  constructor({ attendeeRepo, esClient, eventBus }) {
+  constructor({ attendeeRepo, esClient, eventBus, interactionRepo }) {
+    if (!interactionRepo) throw new Error("DiscoveryController requires interactionRepo");
     this.attendeeRepo = attendeeRepo;
     this.esClient = esClient;
     this.eventBus = eventBus;
-    // Track swipes: key = `${fromId}:${toId}`, value = "like" | "pass"
-    this.swipes = new Map();
-    // Track mutual matches
-    this.matches = new Map();
+    this.interactionRepo = interactionRepo;
   }
 
   /**
    * Retrieves discovery candidate cards for an attendee via Elasticsearch Hybrid Search.
    * @param {string} attendeeId
    * @param {number} [limit=10]
+   * @param {Object} [options]
+   * @param {string} [options.eventId] - only suggest attendees of this event (defaults to the source's event)
    */
-  async getDiscoveryFeed(attendeeId, limit = 10) {
+  async getDiscoveryFeed(attendeeId, limit = 10, { eventId } = {}) {
     const source = await this.attendeeRepo.findById(attendeeId);
     if (!source) {
       throw new Error(`Attendee ${attendeeId} not found`);
     }
+    const scopeEventId = eventId || source.eventId || null;
 
     // Exclude self and already swiped attendees
-    const excludedIds = [attendeeId];
-    for (const [key] of this.swipes.entries()) {
-      if (key.startsWith(`${attendeeId}:`)) {
-        const targetId = key.split(":")[1];
-        excludedIds.push(targetId);
-      }
-    }
+    const excludedIds = [attendeeId, ...(await this.interactionRepo.listSwipedIds(scopeEventId || undefined, attendeeId))];
 
     const queryText = [
       ...source.interests,
@@ -52,15 +49,19 @@ export class DiscoveryController {
       source.challenges
     ].join(" ");
 
+    // The embedded engine holds every event's attendees: over-fetch, then keep the same event only.
     const esResult = await this.esClient.hybridSearch({
       queryText,
       queryVector: source.embedding,
       excludeIds: excludedIds,
-      limit
+      limit: scopeEventId ? Math.max(limit * 4, 50) : limit
     });
+    const scopedHits = esResult.hits
+      .filter((hit) => !scopeEventId || hit.source?.eventId === scopeEventId)
+      .slice(0, limit);
 
     const candidates = [];
-    for (const hit of esResult.hits) {
+    for (const hit of scopedHits) {
       const candidateProfile = hit.source;
       const explanation = explainMatchRelevance(source, candidateProfile, {
         bm25Score: hit.bm25Score,
@@ -96,40 +97,51 @@ export class DiscoveryController {
    * @param {string} params.fromAttendeeId
    * @param {string} params.toAttendeeId
    * @param {"like" | "pass"} params.action
+   * @param {string} [params.eventId] - defaults to the swiping attendee's event
    */
-  async recordSwipe({ fromAttendeeId, toAttendeeId, action }) {
-    const swipeKey = `${fromAttendeeId}:${toAttendeeId}`;
-    this.swipes.set(swipeKey, action);
+  async recordSwipe({ fromAttendeeId, toAttendeeId, action, eventId }) {
+    const source = await this.attendeeRepo.findById(fromAttendeeId);
+    const scopeEventId = eventId || source?.eventId || null;
 
     let isMutual = false;
     let matchEntity = null;
 
-    if (action === "like") {
-      const reverseKey = `${toAttendeeId}:${fromAttendeeId}`;
-      if (this.swipes.get(reverseKey) === "like") {
-        isMutual = true;
+    // A like completes a match when the other attendee already liked back.
+    const reverse = action === "like"
+      ? await this.interactionRepo.findSwipe(scopeEventId || undefined, toAttendeeId, fromAttendeeId)
+      : null;
 
-        const source = await this.attendeeRepo.findById(fromAttendeeId);
-        const target = await this.attendeeRepo.findById(toAttendeeId);
-        const explanation = source && target ? explainMatchRelevance(source, target).synergySummary : "";
+    if (reverse?.action === "like") {
+      isMutual = true;
+      const target = await this.attendeeRepo.findById(toAttendeeId);
+      const explanation = source && target ? explainMatchRelevance(source, target).synergySummary : "";
+      matchEntity = new Match({
+        id: generatePrefixedId("match"),
+        initiatorId: fromAttendeeId,
+        targetId: toAttendeeId,
+        action: "like",
+        mutual: true,
+        explanation,
+        eventId: scopeEventId
+      });
+      // The completing swipe is stored as the mutual match.
+      await this.interactionRepo.saveSwipe(matchEntity);
+    } else {
+      await this.interactionRepo.saveSwipe(new Match({
+        id: generatePrefixedId("swipe"),
+        initiatorId: fromAttendeeId,
+        targetId: toAttendeeId,
+        action,
+        eventId: scopeEventId
+      }));
+    }
 
-        matchEntity = new Match({
-          id: generatePrefixedId("match"),
-          initiatorId: fromAttendeeId,
-          targetId: toAttendeeId,
-          action: "like",
-          mutual: true,
-          explanation
-        });
-
-        this.matches.set(matchEntity.id, matchEntity);
-
-        this.eventBus.publish("match.mutual", {
-          match: matchEntity.toJSON(),
-          fromAttendeeId,
-          toAttendeeId
-        });
-      }
+    if (isMutual) {
+      this.eventBus.publish("match.mutual", {
+        match: matchEntity.toJSON(),
+        fromAttendeeId,
+        toAttendeeId
+      });
     }
 
     return {
@@ -143,20 +155,50 @@ export class DiscoveryController {
   /**
    * Lists mutual matches for an attendee.
    * @param {string} attendeeId
+   * @param {Object} [options]
+   * @param {string} [options.eventId] - event to look in (defaults to the attendee's event)
    */
-  async getMutualMatches(attendeeId) {
+  async getMutualMatches(attendeeId, { eventId } = {}) {
+    const scopeEventId = eventId || (await this.attendeeRepo.findById(attendeeId))?.eventId || undefined;
+    const matches = await this.interactionRepo.listMutualMatches(scopeEventId, attendeeId);
     const results = [];
-    for (const match of this.matches.values()) {
-      if (match.initiatorId === attendeeId || match.targetId === attendeeId) {
-        const partnerId = match.initiatorId === attendeeId ? match.targetId : match.initiatorId;
-        const partner = await this.attendeeRepo.findById(partnerId);
-        results.push({
-          match: match.toJSON(),
-          partner: partner ? partner.toJSON() : null
-        });
-      }
+    for (const match of matches) {
+      const partnerId = match.initiatorId === attendeeId ? match.targetId : match.initiatorId;
+      const partner = await this.attendeeRepo.findById(partnerId);
+      results.push({
+        match: match.toJSON(),
+        partner: partner ? partner.toJSON() : null
+      });
     }
     return results;
+  }
+
+  /**
+   * Resets an attendee's discovery deck: removes their passes (or every swipe with `resetAll`) so those
+   * attendees can be suggested again. Mutual matches are never removed.
+   * @param {string} attendeeId
+   * @param {Object} [options]
+   * @param {string} [options.eventId] - defaults to the attendee's event
+   * @param {boolean} [options.resetAll=false] - also clear likes that did not become matches
+   * @param {number} [options.limit=10] - size of the refreshed feed
+   * @returns {Promise<{ reset: true, removed: number, feed: Object }>}
+   */
+  async resetDiscovery(attendeeId, { eventId, resetAll = false, limit = 10 } = {}) {
+    const scopeEventId = eventId || (await this.attendeeRepo.findById(attendeeId))?.eventId || undefined;
+    const removed = await this.interactionRepo.deleteSwipes(scopeEventId, attendeeId, { action: resetAll ? undefined : "pass" });
+    const feed = await this.getDiscoveryFeed(attendeeId, limit, { eventId: scopeEventId });
+    return { reset: true, removed, feed };
+  }
+
+  /**
+   * Whether one attendee has already liked another (used to auto-reciprocate demo likes).
+   * @param {string} fromAttendeeId
+   * @param {string} toAttendeeId
+   * @param {string} [eventId]
+   */
+  async hasLiked(fromAttendeeId, toAttendeeId, eventId) {
+    const swipe = await this.interactionRepo.findSwipe(eventId, fromAttendeeId, toAttendeeId);
+    return swipe?.action === "like";
   }
 }
 

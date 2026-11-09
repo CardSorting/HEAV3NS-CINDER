@@ -34,14 +34,20 @@ export class PodOrchestrationController {
    * @param {string[]} [params.seedAttendeeIds=[]]
    * @param {string} [params.theme="Autonomous Cloud & Systems"]
    * @param {number} [params.targetSize=5]
+   * @param {string} [params.eventId] - event the pod belongs to (defaults to the first seed attendee's event)
    * @returns {Promise<Pod>}
    */
   async composePod({
     seedAttendeeIds = [],
     theme = "Autonomous Cloud & Systems",
-    targetSize = 5
+    targetSize = 5,
+    eventId = null
   }) {
     const selectedIds = new Set(seedAttendeeIds);
+    let podEventId = eventId;
+    if (!podEventId && seedAttendeeIds.length) {
+      podEventId = (await this.attendeeRepo.findById(seedAttendeeIds[0]))?.eventId || null;
+    }
     const candidateRankings = [];
     let hybridQuerySpec = null;
     let tookMs = 0;
@@ -102,7 +108,7 @@ export class PodOrchestrationController {
 
       // Fallback safety to guarantee reaching targetSize
       if (selectedIds.size < targetSize) {
-        const allAttendees = await this.attendeeRepo.listAll();
+        const allAttendees = await this.attendeeRepo.listAll(podEventId || undefined);
         for (const att of allAttendees) {
           if (!selectedIds.has(att.id)) {
             selectedIds.add(att.id);
@@ -120,7 +126,8 @@ export class PodOrchestrationController {
       id: podId,
       name: podName,
       topic: theme,
-      memberIds
+      memberIds,
+      eventId: podEventId
     });
 
     pod.compositionMeta = {
@@ -171,10 +178,11 @@ export class PodOrchestrationController {
   }
 
   /**
-   * Lists all formed Pods.
+   * Lists formed Pods, optionally only those of one event.
+   * @param {string} [eventId]
    */
-  async listPods() {
-    return this.podRepo.listAll();
+  async listPods(eventId) {
+    return this.podRepo.listAll(eventId);
   }
 }
 

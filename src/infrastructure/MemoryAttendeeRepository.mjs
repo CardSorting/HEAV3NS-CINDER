@@ -23,8 +23,9 @@ export class MemoryAttendeeRepository extends IAttendeeRepository {
     return this.attendees.get(id) || null;
   }
 
-  async listAll() {
-    return Array.from(this.attendees.values());
+  async listAll(eventId) {
+    const all = Array.from(this.attendees.values());
+    return eventId ? all.filter((a) => a.eventId === eventId) : all;
   }
 
   /**

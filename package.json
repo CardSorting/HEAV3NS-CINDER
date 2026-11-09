@@ -1,7 +1,7 @@
 {
   "name": "cinder-conference",
   "version": "1.0.0",
-  "description": "CINDER — The Social Infrastructure for Conferences. Intelligent, agent-facilitated social coordination platform.",
+  "description": "CINDER \u2014 The Social Infrastructure for Conferences. Intelligent, agent-facilitated social coordination platform.",
   "type": "module",
   "main": "src/core/CinderApp.mjs",
   "scripts": {
@@ -15,6 +15,7 @@
     "demo:journey": "node bin/record-live-journey.mjs",
     "deck": "python3 scripts/generate_cinder_90s_deck.py",
     "test": "node --test tests/*.test.mjs",
+    "test:live": "node --env-file=.env --test tests/elasticsearch-live.test.mjs",
     "check": "npx -y -p github:CardSorting/HEAV3NS-JOY#7112dca56704a3bff5f27b9ce8d22cf93d15ead9 joy-check .",
     "docs:check": "node bin/docs-check.mjs .",
     "verify": "npm test && npm run check && npm run docs:check"

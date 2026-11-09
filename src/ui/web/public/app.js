@@ -160,8 +160,15 @@ async function loadInitialData() {
   try {
     const res = await fetch("/api/status");
     const status = await res.json();
-    document.getElementById("es-mode-text").textContent =
-      `ES: ${status.elasticsearch.status.toUpperCase()} (${status.elasticsearch.mode})`;
+    const es = status.elasticsearch;
+    const modeLabel = status.searchMode === "live"
+      ? `LIVE${es.serverless ? " · serverless" : ""}${es.version ? " " + es.version : ""}`
+      : "EMBEDDED (offline fallback)";
+    const modeEl = document.getElementById("es-mode-text");
+    modeEl.textContent = `ES: ${modeLabel}`;
+    modeEl.title = status.searchMode === "live"
+      ? `Elasticsearch cluster ${es.clusterName}`
+      : `Using the in-process engine: ${es.fallbackReason || "cluster unavailable"}`;
 
     const attRes = await fetch("/api/attendees");
     allAttendees = await attRes.json();

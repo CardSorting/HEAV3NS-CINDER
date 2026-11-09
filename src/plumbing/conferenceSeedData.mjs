@@ -7,6 +7,27 @@
  * Completely immutable and stateless.
  */
 
+/**
+ * The event the seed data belongs to, used in offline (embedded) mode when no Elasticsearch cluster is
+ * configured. Same day and timezone as the live demo event so the demo clock lines up with the seed
+ * agenda (lunch 12:15 local). Mountain Standard Time is UTC-07:00 on this date.
+ */
+export const SEED_EVENT = Object.freeze({
+  id: "urn:ue:event:cloud-ai-summit-2026",
+  name: "Cloud & AI Summit 2026",
+  category: "conference",
+  startDate: "2026-12-23T09:00:00-07:00",
+  endDate: "2026-12-23T17:30:00-07:00",
+  timezone: "America/Denver",
+  utcOffset: "-07:00",
+  status: "EventScheduled",
+  attendanceMode: "OfflineEventAttendanceMode",
+  description: "Offline demo conference bundled with CINDER's seed data.",
+  labels: Object.freeze(["cloud", "devops", "machine-learning"]),
+  venue: Object.freeze({ id: "urn:ue:place:cinder-seed-venue", name: "Main Hall Conference Center", city: "Salt Lake City", region: "UT", country: "US" }),
+  cinder: Object.freeze({ enabled: true, registrations: 5, sessions: 5, speakers: 4, announcements: 0 })
+});
+
 export const SEED_ATTENDEES = Object.freeze([
   {
     id: "att_alex_chen",

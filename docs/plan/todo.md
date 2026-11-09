@@ -1,39 +1,38 @@
 <!-- [LAYER: UI] -->
 [x] Push the feat/elasticsearch-data branch to origin and open a pull request into master
 [x] Merge feat/elasticsearch-data into master and create a feat/elasticsearch-integration branch from it
-[ ] Obtain the heav3ns-joy checker, replace the machine-specific path in the package.json check script with a portable command, and confirm npm run check passes on master
-[ ] Rotate the Elasticsearch API key that was shared in chat, store the new key only in .env, and rerun elasticsearch/cinder/verify.py to confirm access
-[ ] Add a plumbing module that loads ES_URL, ES_API_KEY and index names from .env or the process environment without external dependencies
-[ ] Add a plumbing clock module that returns the real time or a configured demo time so all time-dependent logic uses one source
-[ ] Choose the demo event from eventapp and set its id and demo clock time in configuration
-[ ] Extend IElasticsearchClient with generic search, get, index, update, delete-by-query, bulk and inference methods
-[ ] Rewrite the live HTTP transport in ElasticsearchClient to send the ApiKey authorization header, use per-request timeouts, and surface Elasticsearch error types
-[ ] Replace the /_cluster/health probe with GET / so serverless clusters are detected as live instead of returning 410
-[ ] Keep the embedded BM25 and vector engine as the offline fallback and make the active mode explicit in /api/status
-[ ] Add unit tests for the live transport with a mocked fetch covering auth, timeouts, 4xx, 5xx and fallback switching
-[ ] Add an opt-in integration test suite that runs against the live cluster only when ES_URL and ES_API_KEY are set
-[ ] Add an eventId field to the Attendee, Pod, Match and Message domain entities and update their constructors, toJSON and tests
-[ ] Add a ConferenceEvent domain entity for selectable events with id, name, category, dates, timezone, venue and cinder summary
-[ ] Add a Session domain field set for absolute startDate, endDate, timezone, sessionType and spaceId while keeping startTime and endTime for display
-[ ] Add a VenueSpace domain entity matching cinder-spaces with name, aliases, kind, floor, capacity, tags and meetupFriendly
-[ ] Add an Announcement domain entity matching cinder-announcements with publishAt, kind, severity, audience and affects
-[ ] Add domain interfaces IEventRepository, IAgendaRepository, ISpaceRepository, IAnnouncementRepository, IPromptRepository, IInteractionRepository and IMessageRepository
-[ ] Implement an Elasticsearch EventRepository that lists eventapp documents with cinder.enabled true, sorted by start date, with category and date filters
-[ ] Implement an Elasticsearch AttendeeRepository on cinder-registrations that adds eventId, personId and role, drops the 32-dim embedding, and filters every query by eventId
-[ ] Write registrations with refresh wait_for so a checked-in attendee is immediately discoverable and embedded by the cinder-embed-registration pipeline
-[ ] Implement an Elasticsearch InteractionRepository on cinder-interactions for swipes and mutual matches scoped by eventId
-[ ] Implement an Elasticsearch MessageRepository on cinder-messages storing pod messages with channel pod and direct messages with channel direct and matchId
-[ ] Implement an Elasticsearch PodRepository on cinder-pods that stores pods without embedded messages and loads messages through the MessageRepository
-[ ] Implement Elasticsearch AgendaRepository, SpaceRepository, AnnouncementRepository and PromptRepository using the from_session and from_space mappings in elasticsearch/cinder/compat_check.py
-[ ] Add unit tests for every Elasticsearch repository with a mocked client, including the strict-mapping adapter transforms
-[ ] Add an EventController in core that lists selectable events and resolves the active event for a request
-[ ] Wire the Elasticsearch repositories into CinderApp behind configuration, keeping the memory repositories for offline mode and tests
-[ ] Add GET /api/conferences and GET /api/conferences/:id routes and require an eventId parameter on attendee, discovery, swipe, match, pod and agenda routes
-[ ] Scope SSE broadcasts by eventId so clients only receive realtime events for their selected event
-[ ] Move swipe and match state out of DiscoveryController maps into the InteractionRepository
-[ ] Move the discovery reset logic from webServer into a DiscoveryController method so the UI layer holds no state
-[ ] Move direct-message storage from the webServer directMessages map into CommunicationController and the MessageRepository
-[ ] Move meetup pinning and RSVP logic from webServer routes into CommunicationController methods
+[x] Obtain the heav3ns-joy checker, replace the machine-specific path in the package.json check script with a portable command, and confirm npm run check passes on master
+[x] Add a plumbing module that loads ES_URL, ES_API_KEY and index names from .env or the process environment without external dependencies
+[x] Add a plumbing clock module that returns the real time or a configured demo time so all time-dependent logic uses one source
+[x] Choose the demo event from eventapp and set its id and demo clock time in configuration
+[x] Extend IElasticsearchClient with generic search, get, index, update, delete-by-query, bulk and inference methods
+[x] Rewrite the live HTTP transport in ElasticsearchClient to send the ApiKey authorization header, use per-request timeouts, and surface Elasticsearch error types
+[x] Replace the /_cluster/health probe with GET / so serverless clusters are detected as live instead of returning 410
+[x] Keep the embedded BM25 and vector engine as the offline fallback and make the active mode explicit in /api/status
+[x] Add unit tests for the live transport with a mocked fetch covering auth, timeouts, 4xx, 5xx and fallback switching
+[x] Add an opt-in integration test suite that runs against the live cluster only when ES_URL and ES_API_KEY are set
+[x] Add an eventId field to the Attendee, Pod, Match and Message domain entities and update their constructors, toJSON and tests
+[x] Add a ConferenceEvent domain entity for selectable events with id, name, category, dates, timezone, venue and cinder summary
+[x] Add a Session domain field set for absolute startDate, endDate, timezone, sessionType and spaceId while keeping startTime and endTime for display
+[x] Add a VenueSpace domain entity matching cinder-spaces with name, aliases, kind, floor, capacity, tags and meetupFriendly
+[x] Add an Announcement domain entity matching cinder-announcements with publishAt, kind, severity, audience and affects
+[x] Add domain interfaces IEventRepository, IAgendaRepository, ISpaceRepository, IAnnouncementRepository, IPromptRepository, IInteractionRepository and IMessageRepository
+[x] Implement an Elasticsearch EventRepository that lists eventapp documents with cinder.enabled true, sorted by start date, with category and date filters
+[x] Implement an Elasticsearch AttendeeRepository on cinder-registrations that adds eventId, personId and role, drops the 32-dim embedding, and filters every query by eventId
+[x] Write registrations with refresh wait_for so a checked-in attendee is immediately discoverable and embedded by the cinder-embed-registration pipeline
+[x] Implement an Elasticsearch InteractionRepository on cinder-interactions for swipes and mutual matches scoped by eventId
+[x] Implement an Elasticsearch MessageRepository on cinder-messages storing pod messages with channel pod and direct messages with channel direct and matchId
+[x] Implement an Elasticsearch PodRepository on cinder-pods that stores pods without embedded messages and loads messages through the MessageRepository
+[x] Implement Elasticsearch AgendaRepository, SpaceRepository, AnnouncementRepository and PromptRepository using the from_session and from_space mappings in elasticsearch/cinder/compat_check.py
+[x] Add unit tests for every Elasticsearch repository with a mocked client, including the strict-mapping adapter transforms
+[x] Add an EventController in core that lists selectable events and resolves the active event for a request
+[x] Wire the Elasticsearch repositories into CinderApp behind configuration, keeping the memory repositories for offline mode and tests
+[x] Add GET /api/conferences and GET /api/conferences/:id routes and require an eventId parameter on attendee, discovery, swipe, match, pod and agenda routes
+[x] Scope SSE broadcasts by eventId so clients only receive realtime events for their selected event
+[x] Move swipe and match state out of DiscoveryController maps into the InteractionRepository
+[x] Move the discovery reset logic from webServer into a DiscoveryController method so the UI layer holds no state
+[x] Move direct-message storage from the webServer directMessages map into CommunicationController and the MessageRepository
+[x] Move meetup pinning and RSVP logic from webServer routes into CommunicationController methods
 [ ] Change CheckInController to save registrations through the Elasticsearch repository and stop computing 32-dim embeddings in live mode
 [ ] Replace the hybridSearch implementation in live mode with an Elasticsearch RRF retriever combining BM25 on profile fields, kNN on the stored profile vector, and kNN on looking_for text via query_vector_builder
 [ ] Fetch stored vectors with _source exclude_vectors false wherever a stored embedding is reused as a kNN query
