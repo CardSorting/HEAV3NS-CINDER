@@ -117,6 +117,8 @@ describe("CinderApp composition root", () => {
         async hybridSearch(p) { sent.push(p); return { hits: [{ id: "att_c", score: 1, source: { id: "att_c", name: "C" } }], totalHits: 1, tookMs: 1, querySpec: {} }; } } });
     const vectors = { att_a: Array(1024).fill(0.2), att_b: Array(1024).fill(0.4) };
     app.attendeeRepo.findById = async (id) => ({ id, name: id, eventId: DEMO, interests: ["Kubernetes"], topics: [], expertise: [], embedding: vectors[id] || [], toJSON() { return { id }; } });
+    app.attendeeRepo.listAll = async () => [];
+    app.interactionRepo.listMutualMatches = async () => [];
     app.podRepo.save = async () => {};
     const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_a", "att_b"], theme: "Platform", targetSize: 3 });
     assert.strictEqual(sent[0].eventId, DEMO);

@@ -24,7 +24,12 @@ if (mode === "dump") {
     return j;
   });
   const attendees = (await app.checkInCtrl.listAttendees()).map((a) => a.toJSON());
-  const matches = [...app.discoveryCtrl.matches.values()].map((m) => m.toJSON());
+  // Mutual matches live in the InteractionRepository (event-scoped); collect them once each.
+  const byId = new Map();
+  for (const a of attendees) {
+    for (const m of await app.interactionRepo.listMutualMatches(a.eventId || app.defaultEventId, a.id)) byId.set(m.id, m.toJSON());
+  }
+  const matches = [...byId.values()];
   // Same shape webServer builds for POST /api/matches/:id/messages
   const directMessage = {
     id: "dm_compat", matchId: matches[0]?.id, senderId: attendees[0].id, senderName: attendees[0].name,

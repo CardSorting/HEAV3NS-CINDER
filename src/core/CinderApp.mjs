@@ -157,7 +157,8 @@ export class CinderApp {
       attendeeRepo: this.attendeeRepo,
       esClient: this.esClient,
       eventBus: this.eventBus,
-      facilitatorService: this.facilitatorService
+      facilitatorService: this.facilitatorService,
+      interactionRepo: this.interactionRepo
     });
 
     this.commCtrl = new CommunicationController({

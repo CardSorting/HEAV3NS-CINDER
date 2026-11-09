@@ -19,6 +19,7 @@ import { IAnnouncementRepository } from "../src/domain/interfaces/IAnnouncementR
 import { IPromptRepository } from "../src/domain/interfaces/IPromptRepository.mjs";
 import { IInteractionRepository } from "../src/domain/interfaces/IInteractionRepository.mjs";
 import { IMessageRepository } from "../src/domain/interfaces/IMessageRepository.mjs";
+import { selectPodMembers, disciplineOf } from "../src/domain/podComposition.mjs";
 import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
 
 describe("Domain Entities", () => {
@@ -352,6 +353,39 @@ describe("Complementary match explanations", () => {
     assert.strictEqual(e.answersLookingFor, true);
     assert.deepStrictEqual(Object.keys(e).slice(0, 5), ["headline", "sharedInterests", "complementaryStrengths", "synergySummary", "scorePercent"]);
     assert.strictEqual(e.scorePercent, 75, "no score information -> 75");
+  });
+});
+
+describe("Pod composition diversity", () => {
+  const p = (id, discipline) => ({ id, discipline });
+  const seeds = [p("s1", "platform"), p("s2", "platform")];
+
+  it("caps each discipline while keeping relevance order", () => {
+    const candidates = [p("c1", "platform"), p("c2", "platform"), p("c3", "sre"), p("c4", "sre"), p("c5", "sre"), p("c6", "security")];
+    const r = selectPodMembers({ seeds, candidates, targetSize: 5 });
+    assert.deepStrictEqual(r.members.map((m) => m.id), ["s1", "s2", "c3", "c4", "c6"]);
+    assert.deepStrictEqual(r.disciplines, { platform: 2, sre: 2, security: 1 });
+    assert.deepStrictEqual(r.skippedForDiversity, ["c1", "c2", "c5"]);
+    assert.strictEqual(r.relaxedCap, false);
+  });
+
+  it("adds the seeds' mutual matches first as anchors", () => {
+    const r = selectPodMembers({ seeds, anchors: [p("m1", "data-eng")], candidates: [p("c3", "sre"), p("c4", "ml-eng"), p("c5", "backend")], targetSize: 5 });
+    assert.deepStrictEqual(r.members.map((m) => m.id), ["s1", "s2", "m1", "c3", "c4"]);
+    assert.deepStrictEqual(r.anchorsUsed, ["m1"]);
+  });
+
+  it("relaxes the cap only when the pod cannot otherwise be filled", () => {
+    const r = selectPodMembers({ seeds, candidates: [p("c1", "platform"), p("c2", "platform"), p("c3", "sre")], targetSize: 5 });
+    assert.strictEqual(r.members.length, 5);
+    assert.strictEqual(r.relaxedCap, true);
+  });
+
+  it("derives a discipline from the title when the registration has none", () => {
+    assert.strictEqual(disciplineOf({ discipline: "SRE", title: "Staff SRE" }), "sre");
+    assert.strictEqual(disciplineOf({ title: "Senior Platform Engineer" }), "platform");
+    assert.strictEqual(disciplineOf({ title: "Principal Observability Architect" }), "observability architect");
+    assert.strictEqual(disciplineOf({}), "unknown");
   });
 });
 
