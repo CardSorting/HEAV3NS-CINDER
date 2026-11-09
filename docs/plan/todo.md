@@ -9,7 +9,7 @@
 [x] Rewrite the live HTTP transport in ElasticsearchClient to send the ApiKey authorization header, use per-request timeouts, and surface Elasticsearch error types
 [x] Replace the /_cluster/health probe with GET / so serverless clusters are detected as live instead of returning 410
 [x] Keep the embedded BM25 and vector engine as the offline fallback and make the active mode explicit in /api/status
-[ ] Add unit tests for the live transport with a mocked fetch covering auth, timeouts, 4xx, 5xx and fallback switching
+[x] Add unit tests for the live transport with a mocked fetch covering auth, timeouts, 4xx, 5xx and fallback switching
 [ ] Add an opt-in integration test suite that runs against the live cluster only when ES_URL and ES_API_KEY are set
 [ ] Add an eventId field to the Attendee, Pod, Match and Message domain entities and update their constructors, toJSON and tests
 [ ] Add a ConferenceEvent domain entity for selectable events with id, name, category, dates, timezone, venue and cinder summary
