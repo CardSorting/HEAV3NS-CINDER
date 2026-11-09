@@ -4,3 +4,12 @@ node_modules/
 .joy-state/
 *.log
 
+
+# Local secrets (Elasticsearch URL + API key) — never commit
+.env
+.env.*
+!.env.example
+
+# Python tooling (elasticsearch/)
+__pycache__/
+*.pyc

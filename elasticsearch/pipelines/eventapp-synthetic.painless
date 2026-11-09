@@ -1,0 +1,502 @@
+// eventapp-synthetic: rebuilds a shuffled events2 doc into a coherent, realistic-looking event.
+// Only `category` and `_id` are taken from the source doc; everything else is regenerated from
+// the catalog in params so names, venue, address, timezone, currency, dates, lineup and prices agree.
+// Deterministic: the RNG is seeded from _id, so re-running the reindex gives identical output.
+
+// ---------------- helpers ----------------
+double rnd(long[] s) { long x = s[0]; x ^= x << 13; x ^= x >>> 7; x ^= x << 17; s[0] = x; return (double)(x >>> 11) / 9007199254740992.0; }
+int ri(long[] s, int lo, int hi) { return lo + (int)Math.floor(rnd(s) * (hi - lo + 1)); }
+def pick(long[] s, def l) { return l.get((int)Math.floor(rnd(s) * l.size())); }
+boolean chance(long[] s, double p) { return rnd(s) < p; }
+List sample(long[] s, def l, int n) {
+  List c = new ArrayList(l); List out = new ArrayList();
+  while (out.size() < n && c.size() > 0) out.add(c.remove((int)Math.floor(rnd(s) * c.size())));
+  return out;
+}
+String slug(String t) {
+  StringBuilder b = new StringBuilder(); boolean dash = false; String lt = t.toLowerCase();
+  for (int i = 0; i < lt.length(); i++) {
+    int c = lt.charAt(i);
+    if ((c >= 97 && c <= 122) || (c >= 48 && c <= 57)) { b.append((char)c); dash = false; }
+    else if (!dash && b.length() > 0) { b.append('-'); dash = true; }
+  }
+  String r = b.toString();
+  return r.endsWith('-') ? r.substring(0, r.length() - 1) : r;
+}
+String rid(long[] s, String abc, int n) { StringBuilder b = new StringBuilder(); for (int i = 0; i < n; i++) b.append(abc.charAt(ri(s, 0, abc.length() - 1))); return b.toString(); }
+String iso(ZonedDateTime z) { return z.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME); }
+String utc(ZonedDateTime z) { return z.withZoneSameInstant(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT); }
+ZonedDateTime at(LocalDate d, String hm, ZoneId z) {
+  return ZonedDateTime.of(d.getYear(), d.getMonthValue(), d.getDayOfMonth(), Integer.parseInt(hm.substring(0, 2)), Integer.parseInt(hm.substring(3, 5)), 0, 0, z);
+}
+double money(double usd, def country) {
+  double v = usd * ((Number)country.fx).doubleValue();
+  if (country.currency == 'JPY') return Math.round(v / 500.0) * 500.0;
+  return (double)Math.round(v);
+}
+int imin(def a, def b) { int x = ((Number)a).intValue(); int y = ((Number)b).intValue(); return x < y ? x : y; }
+int imax(def a, def b) { int x = ((Number)a).intValue(); int y = ((Number)b).intValue(); return x > y ? x : y; }
+double price99(double usd) { return Math.max(9.0, Math.round(usd / 50.0) * 50.0 - 1.0); }
+void put(Map m, String k, def v) { if (v != null) m.put(k, v); }
+Map person(long[] s, def C, boolean dr) {
+  String n = (dr ? 'Dr. ' : '') + pick(s, C.firstNames) + ' ' + pick(s, C.lastNames);
+  return ['@type': 'Person', 'name': n, 'description': pick(s, C.jobTitles) + ' at ' + pick(s, C.companies)];
+}
+Map role(String roleName, int order, Map who) {
+  return ['@type': 'PerformanceRole', 'roleName': roleName, 'billingOrder': order, 'name': who.name, 'performer': [who]];
+}
+Map offer(String name, double price, def country, String cat) {
+  return ['@type': 'Offer', 'name': name, 'category': cat, 'price': price, 'priceCurrency': country.currency];
+}
+List venuesFor(def C, String cat, def styles) {
+  List out = new ArrayList();
+  for (def v : C.venues) if (v.cats.contains(cat) && (styles == null || styles.contains(v.style))) out.add(v);
+  return out;
+}
+def venueById(def C, String id) { for (def v : C.venues) if (v.id == id) return v; return null; }
+String ordinal(int n) {
+  int m = n % 100; if (m >= 11 && m <= 13) return n + 'th';
+  int d = n % 10; return n + (d == 1 ? 'st' : (d == 2 ? 'nd' : (d == 3 ? 'rd' : 'th')));
+}
+String joinNames(List names) {
+  if (names.size() == 0) return ''; if (names.size() == 1) return names.get(0);
+  return String.join(', ', names.subList(0, names.size() - 1)) + ' and ' + names.get(names.size() - 1);
+}
+Map sess(String id, String type, String name, ZonedDateTime st, int mins, String track, String sessionType, String room, Map who, String roleName) {
+  Map m = ['@id': id, '@type': type, 'name': name, 'startDate': iso(st), 'endDate': iso(st.plusMinutes(mins)),
+           'duration': 'PT' + mins + 'M', 'location': ['@type': 'Room', 'name': room]];
+  put(m, 'track', track); put(m, 'sessionType', sessionType);
+  if (who != null) m.performer = [['@type': 'PerformanceRole', 'roleName': roleName, 'performer': [who]]];
+  return m;
+}
+
+// ---------------- setup ----------------
+def C = params;
+String cat = ctx.category == null ? 'concert' : ctx.category.toString();
+long[] s = new long[] { ((long)ctx._id.hashCode()) * 2654435761L + 1442695040888963407L };
+if (s[0] == 0) s[0] = 88172645463325252L;
+for (int i = 0; i < 5; i++) rnd(s);
+ZonedDateTime NOW = ZonedDateTime.parse(C.now);
+String ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+String DIGITS = '0123456789';
+String HEX = '0123456789abcdef';
+
+String name = ''; String type = 'Event'; String desc = ''; String orgName = ''; String url = '';
+List labels = new ArrayList(); List performers = new ArrayList(); List subs = new ArrayList();
+List offers = new ArrayList(); List sponsors = new ArrayList(); List srcNames = new ArrayList();
+List identifiers = new ArrayList(); List tm = null; String age = null; Map superEv = null; Map cfp = null;
+String mode = 'OfflineEventAttendanceMode'; String attMethod = 'estimated'; String coc = null;
+def v = null; ZonedDateTime start = null; ZonedDateTime end = null; ZonedDateTime doors = null;
+int cap = 0; double fillLo = 0.55; double fillHi = 1.0; boolean ticketed = true; boolean forceEn = false;
+List prefs = [1, 2, 3, 4, 5, 6, 7];
+String startTime = '19:00';
+int durMin = 150; int nDays = 1; String dailyEnd = null;
+
+// pick venue / pattern first (date needs venue tz)
+def g = null; String gk = null; def fest = null; def topic = null; String tk = null; def acad = null; def expo = null;
+def ctpl = null; String sport = null; String film = null; String fmt = null;
+if (cat == 'concert') {
+  List gkeys = new ArrayList(C.genres.keySet()); Collections.sort(gkeys);
+  gk = pick(s, gkeys); g = C.genres[gk];
+  List vs = venuesFor(C, 'concert', g.styles); if (vs.isEmpty()) vs = venuesFor(C, 'concert', null);
+  v = pick(s, vs); prefs = [4, 5, 6];
+} else if (cat == 'comedy') { v = pick(s, venuesFor(C, 'comedy', null)); prefs = [4, 5, 6]; }
+else if (cat == 'sports') {
+  List vs = new ArrayList(); for (def x : C.venues) if (x.home != null) vs.add(x);
+  v = pick(s, vs); sport = pick(s, v.home);
+} else if (cat == 'festival') { fest = pick(s, C.festivals); v = venueById(C, fest.venue); prefs = [5]; }
+else if (cat == 'conference') { tk = pick(s, C.conferenceTopics); topic = C.topics[tk]; v = pick(s, venuesFor(C, 'conference', null)); prefs = [2, 3, 4]; }
+else if (cat == 'academic') { acad = pick(s, C.academicConfs); tk = acad.topic; topic = C.topics[tk]; v = pick(s, venuesFor(C, 'academic', null)); prefs = [1, 2, 3]; }
+else if (cat == 'expo') {
+  expo = pick(s, C.expos); List vs = new ArrayList();
+  for (def x : venuesFor(C, 'expo', null)) if (expo.countries.contains(x.country)) vs.add(x);
+  if (vs.isEmpty()) vs = venuesFor(C, 'expo', null);
+  v = pick(s, vs); prefs = [2, 3];
+} else if (cat == 'meetup') { tk = pick(s, C.meetupTopics); topic = C.topics[tk]; v = pick(s, venuesFor(C, 'meetup', null)); prefs = [2, 3, 4]; }
+else if (cat == 'community') {
+  ctpl = pick(s, C.community); List vs = venuesFor(C, 'community', ctpl.styles);
+  if (vs.isEmpty()) vs = venuesFor(C, 'community', null);
+  v = pick(s, vs);
+  prefs = Integer.parseInt(ctpl.times[0].substring(0, 2)) >= 17 ? [2, 3, 4, 5] : [6, 7];
+} else { // screening (and any unknown category)
+  cat = 'screening'; film = pick(s, C.films); fmt = pick(s, C.screeningFormats);
+  List styles = fmt.contains('Outdoor') ? ['amphitheater', 'park'] : ['theater', 'room'];
+  List vs = venuesFor(C, 'screening', styles); if (vs.isEmpty()) vs = venuesFor(C, 'screening', null);
+  v = pick(s, vs); prefs = [3, 4, 5, 6, 7];
+}
+
+def country = C.countries[v.country];
+ZoneId tz = ZoneId.of(v.tz);
+int off = (int)(-45 + Math.pow(rnd(s), 1.3) * 470);          // ~10% past, skewed toward the near future
+LocalDate day = NOW.withZoneSameInstant(tz).toLocalDate().plusDays(off);
+for (int i = 0; i < 7 && !prefs.contains(day.getDayOfWeek().getValue()); i++) day = day.plusDays(1);
+if (cat == 'screening' && fmt.contains('Outdoor')) { while (day.getMonthValue() < 6 || day.getMonthValue() > 9) day = day.plusMonths(1); }
+if ((cat == 'festival' || (cat == 'community' && v.style == 'park')) && (day.getMonthValue() < 5 || day.getMonthValue() > 9)) {
+  day = day.withMonth(ri(s, 5, 9));
+  if (day.isBefore(NOW.toLocalDate())) day = day.plusYears(1);
+  for (int i = 0; i < 7 && !prefs.contains(day.getDayOfWeek().getValue()); i++) day = day.plusDays(1);
+}
+int year = day.getYear();
+String vslug = slug(v.name);
+
+// ---------------- category builders ----------------
+if (cat == 'concert') {
+  type = 'MusicEvent'; labels.add(gk); tm = g.tm; srcNames.add('ticketmaster'); if (chance(s, 0.6)) srcNames.add('bandsintown');
+  List artists = sample(s, g.artists, 3);
+  String head = artists.get(0);
+  int nOpen = gk == 'classical' ? 0 : ri(s, 0, 2);
+  startTime = (gk == 'classical' || gk == 'jazz') ? pick(s, ['19:30', '20:00']) : pick(s, ['19:00', '19:30', '20:00']);
+  start = at(day, startTime, tz); doors = start.minusMinutes(gk == 'classical' ? 45 : 60);
+  end = start.plusMinutes(nOpen * 45 + (gk == 'classical' ? 120 : 105));
+  List openers = new ArrayList();
+  for (int i = 1; i <= nOpen; i++) {
+    String an = artists.get(i); openers.add(an);
+    Map r = role('opener', i + 1, ['@type': C.soloArtists.contains(an) ? 'Person' : 'MusicGroup', 'name': an]);
+    r.startDate = iso(start.plusMinutes((i - 1) * 45)); r.endDate = iso(start.plusMinutes((i - 1) * 45 + 30));
+    performers.add(r);
+  }
+  Map hr = role('headliner', 1, ['@type': C.soloArtists.contains(head) ? 'Person' : 'MusicGroup', 'name': head]);
+  hr.startDate = iso(start.plusMinutes(nOpen * 45)); hr.endDate = iso(end);
+  performers.add(0, hr);
+  if (gk == 'classical') name = head + ': ' + pick(s, C.classicalPrograms);
+  else if (gk == 'jazz' && chance(s, 0.5)) name = head + ': ' + pick(s, C.jazzPrograms);
+  else {
+    double r = rnd(s);
+    if (r < 0.35) {
+      String tour = head + ': ' + pick(s, C.tourNames) + ' Tour'; name = tour;
+      superEv = ['@id': 'urn:ue:series:' + slug(tour), '@type': 'EventSeries', 'name': tour, 'seriesType': 'tour'];
+    } else if (r < 0.65 && nOpen > 0) name = head + ' with ' + joinNames(openers);
+    else name = head;
+  }
+  desc = head + ' performs live at ' + v.name + ' in ' + v.city + (nOpen > 0 ? ', with support from ' + joinNames(openers) : '') + '.';
+  cap = v.cap; if (v.style == 'arena') fillLo = 0.45;
+  double base = v.style == 'arena' ? ri(s, 45, 120) : (v.style == 'theater' ? ri(s, 35, 110) : (v.style == 'amphitheater' ? ri(s, 45, 95) : ri(s, 22, 55)));
+  if (v.style == 'arena') { offers.add(offer('Floor GA', money(base * 1.25, country), country, 'primary')); offers.add(offer('Lower Level', money(base, country), country, 'primary')); offers.add(offer('Upper Level', money(base * 0.6, country), country, 'primary')); }
+  else if (v.style == 'theater') { offers.add(offer('Orchestra', money(base * 1.3, country), country, 'primary')); offers.add(offer('Balcony', money(base * 0.8, country), country, 'primary')); }
+  else offers.add(offer('General Admission', money(base, country), country, 'primary'));
+  if (gk != 'classical' && chance(s, 0.3)) offers.add(offer('VIP Package', money(base * 3.0, country), country, 'primary'));
+  if (v.style == 'club') age = v.country == 'US' ? pick(s, ['21-', '18-', '18-', null]) : pick(s, ['16-', null]);
+  orgName = pick(s, C.promoters);
+  url = 'https://' + vslug + '.example/events/' + slug(name) + '-' + day;
+}
+else if (cat == 'comedy') {
+  type = 'ComedyEvent'; labels.add('comedy'); labels.add('stand-up'); tm = ['Arts & Theatre', 'Comedy', 'Comedy'];
+  srcNames.add('ticketmaster');
+  List cs = sample(s, C.comedians, 2); String head = cs.get(0);
+  startTime = pick(s, ['19:00', '19:30', '21:30']); start = at(day, startTime, tz); doors = start.minusMinutes(30); end = start.plusMinutes(105);
+  performers.add(role('headliner', 1, ['@type': 'Person', 'name': head]));
+  boolean opener = chance(s, 0.5);
+  if (opener) performers.add(role('opener', 2, ['@type': 'Person', 'name': cs.get(1)]));
+  if (chance(s, 0.6)) {
+    String tour = head + ': ' + pick(s, C.comedySpecials) + ' Tour'; name = tour;
+    superEv = ['@id': 'urn:ue:series:' + slug(tour), '@type': 'EventSeries', 'name': tour, 'seriesType': 'tour'];
+  } else name = head + ' Live';
+  desc = 'Stand-up comedy from ' + head + (opener ? ', with ' + cs.get(1) : '') + ' at ' + v.name + '.';
+  cap = v.cap; if (v.style == 'arena') fillLo = 0.4;
+  double base = ri(s, 30, 75);
+  if (v.style == 'club') offers.add(offer('General Admission', money(base, country), country, 'primary'));
+  else { offers.add(offer('Premium Seating', money(base * 1.5, country), country, 'primary')); offers.add(offer('Standard Seating', money(base, country), country, 'primary')); }
+  age = '18-'; orgName = pick(s, C.promoters);
+  url = 'https://' + vslug + '.example/events/' + slug(name) + '-' + day;
+}
+else if (cat == 'sports') {
+  type = 'SportsEvent'; def team = C.teams[sport]; String home = team.byVenue[v.id]; String away;
+  if (team.away != null) away = pick(s, team.away);
+  else { List others = new ArrayList(); for (def t : team.byVenue.values()) if (t != home) others.add(t); away = pick(s, others); }
+  labels.add(sport); tm = team.tm; srcNames.add('ticketmaster'); if (chance(s, 0.5)) srcNames.add('predicthq');
+  boolean weekend = day.getDayOfWeek().getValue() >= 6;
+  startTime = weekend ? pick(s, ['13:00', '16:00', '18:00']) : pick(s, ['19:00', '19:30']);
+  start = at(day, startTime, tz); doors = start.minusMinutes(90);
+  end = start.plusMinutes(sport == 'hockey' ? 150 : (sport == 'basketball' ? 135 : 120));
+  name = home + ' vs. ' + away;
+  performers.add(role('home team', 1, ['@type': 'SportsTeam', 'name': home]));
+  performers.add(role('away team', 2, ['@type': 'SportsTeam', 'name': away]));
+  int sy = day.getMonthValue() >= 8 ? year : year - 1;
+  String season = home + ' ' + sy + '–' + ((sy + 1) % 100) + ' Season';
+  superEv = ['@id': 'urn:ue:series:' + slug(season), '@type': 'EventSeries', 'name': season, 'seriesType': 'recurring'];
+  desc = 'The ' + home + ' host the ' + away + ' at ' + v.name + '.';
+  cap = v.cap; fillLo = 0.6; attMethod = 'modeled';
+  double low = ri(s, 22, 60);
+  Map ag = ['@type': 'AggregateOffer', 'name': 'Single Game Tickets', 'category': 'primary', 'lowPrice': money(low, country), 'highPrice': money(low * ri(s, 5, 9), country), 'priceCurrency': country.currency];
+  offers.add(ag);
+  if (chance(s, 0.3)) offers.add(['@type': 'AggregateOffer', 'name': 'Resale', 'category': 'resale', 'lowPrice': money(low * 0.9, country), 'highPrice': money(low * 12, country), 'priceCurrency': country.currency]);
+  orgName = home; url = 'https://' + slug(home) + '.example/schedule/' + day;
+}
+else if (cat == 'festival') {
+  type = 'Festival'; labels.addAll(fest.genres); labels.add('festival'); tm = ['Music', 'Festival', 'Music Festival'];
+  srcNames.add('predicthq'); if (chance(s, 0.6)) srcNames.add('ticketmaster');
+  nDays = ri(s, 2, 3);
+  start = at(day, '12:00', tz); doors = start.minusMinutes(60); end = at(day.plusDays(nDays - 1), '23:00', tz);
+  List pool = new ArrayList(); for (def gn : fest.genres) for (def a : C.genres[gn].artists) if (!pool.contains(a)) pool.add(a);
+  List lineup = sample(s, pool, imin(pool.size(), ri(s, 6, 10)));
+  List slots = ['21:00', '19:15', '17:30', '15:45', '14:00'];
+  for (int k = 0; k < lineup.size(); k++) {
+    String an = lineup.get(k); int dIdx = k % nDays; int slot = imin(k / nDays, slots.size() - 1);
+    String stage = slot == 0 || slot % 2 == 0 ? 'Main Stage' : 'Second Stage';
+    Map who = ['@type': C.soloArtists.contains(an) ? 'Person' : 'MusicGroup', 'name': an];
+    performers.add(role(k < nDays ? 'headliner' : 'performer', k + 1, who));
+    subs.add(sess('urn:ue:event:' + slug(fest.name) + '-' + year + '-' + slug(an), 'MusicEvent', an + ' (' + stage + ')',
+                  at(day.plusDays(dIdx), slots.get(slot), tz), slot == 0 ? 90 : 60, null, 'set', stage, who, k < nDays ? 'headliner' : 'performer'));
+  }
+  name = fest.name + ' ' + year;
+  superEv = ['@id': 'urn:ue:series:' + slug(fest.name), '@type': 'EventSeries', 'name': fest.name, 'seriesType': 'edition-series'];
+  desc = fest.name + ' returns to ' + v.name + ' in ' + v.city + ' for ' + nDays + ' days of live music featuring ' + lineup.get(0) + ', ' + lineup.get(1) + ' and more.';
+  cap = imin(v.cap, ri(s, 8000, 40000)); fillLo = 0.5; fillHi = 0.95;
+  double base = ri(s, 79, 149);
+  offers.add(offer('Single Day Pass', money(base, country), country, 'primary'));
+  offers.add(offer(nDays + '-Day Pass', money(base * (nDays == 2 ? 1.7 : 2.3), country), country, 'primary'));
+  offers.add(offer('VIP ' + nDays + '-Day Pass', money(base * (nDays == 2 ? 4.0 : 5.0), country), country, 'primary'));
+  orgName = fest.name + ' Productions';
+  url = 'https://' + slug(fest.name) + '.example/' + year;
+  coc = 'https://' + slug(fest.name) + '.example/conduct';
+}
+else if (cat == 'conference' || cat == 'academic') {
+  boolean acadm = cat == 'academic';
+  type = acadm ? 'EducationEvent' : 'BusinessEvent'; labels.add(tk); forceEn = true;
+  if (acadm) labels.add('research'); else if (chance(s, 0.4)) { String t2 = pick(s, C.conferenceTopics); if (!labels.contains(t2)) labels.add(t2); }
+  nDays = acadm ? 3 : ri(s, 1, 3);
+  start = at(day, '09:00', tz); doors = start.minusMinutes(60); end = at(day.plusDays(nDays - 1), acadm ? '18:00' : '17:30', tz);
+  String brand;
+  if (acadm) {
+    brand = acad.full;
+    name = acad.acr + ' ' + year + ': ' + ordinal(3 + ((acad.acr.hashCode() % 15) + 15) % 15 + (year - 2026)) + ' ' + acad.full;
+    identifiers.add(['propertyID': 'dblp', 'value': 'conf/' + acad.acr.toLowerCase()]);
+    srcNames.add('wikicfp'); if (chance(s, 0.5)) srcNames.add('confs-tech');
+    orgName = acad.acr + ' Steering Committee';
+    url = 'https://' + acad.acr.toLowerCase() + '-conf.example/' + year;
+  } else {
+    brand = pick(s, topic.brands);
+    name = chance(s, 0.5) ? brand + ' ' + v.city + ' ' + year : brand + ' ' + year;
+    for (def sn : sample(s, ['confs-tech', 'sessionize', 'eventbrite', 'predicthq'], ri(s, 1, 2))) srcNames.add(sn);
+    orgName = brand + ' Organizing Committee';
+    url = 'https://' + slug(brand) + '.example/' + year;
+    for (def sp : sample(s, C.companies, ri(s, 2, 4))) sponsors.add(['@type': 'Organization', 'name': sp]);
+  }
+  superEv = ['@id': 'urn:ue:series:' + slug(brand), '@type': 'EventSeries', 'name': brand, 'seriesType': 'edition-series'];
+  double rm = rnd(s);
+  mode = rm < 0.72 ? 'OfflineEventAttendanceMode' : (rm < 0.95 ? 'MixedEventAttendanceMode' : 'OnlineEventAttendanceMode');
+  // sessions
+  Map kn = person(s, C, acadm && chance(s, 0.7));
+  if (acadm) kn.description = 'Professor at ' + pick(s, C.universities);
+  String ktitle = 'Opening Keynote: ' + pick(s, C.keynoteThemes);
+  subs.add(sess(url + '/keynote', 'EducationEvent', ktitle, start.plusMinutes(15), 60, 'Main', 'keynote', 'Auditorium', kn, 'speaker'));
+  performers.add(role('keynote speaker', 1, kn));
+  List times = ['10:30', '11:30', '13:30', '14:30', '15:45'];
+  List talks = sample(s, topic.talks, imin(topic.talks.size(), ri(s, 3, 6)));
+  for (int k = 0; k < talks.size(); k++) {
+    Map sp = person(s, C, acadm && chance(s, 0.6));
+    if (acadm && chance(s, 0.5)) sp.description = pick(s, ['Professor', 'Postdoctoral Researcher', 'PhD Candidate']) + ' at ' + pick(s, C.universities);
+    boolean ws = !acadm && chance(s, 0.15);
+    String title = acadm ? 'Paper Session: ' + talks.get(k) : (ws ? 'Workshop: ' + talks.get(k) : talks.get(k));
+    LocalDate sd = day.plusDays(k % nDays);
+    subs.add(sess(url + '/sessions/' + slug(talks.get(k)), 'EducationEvent', title, at(sd, times.get(k % times.size()), tz), ws ? 180 : 45,
+                  ws ? 'Workshops' : pick(s, ['Main', topic.label]), ws ? 'workshop' : 'talk', pick(s, C.rooms), sp, 'speaker'));
+  }
+  double base = acadm ? ri(s, 450, 850) : ri(s, 299, 1199);
+  if (acadm) {
+    offers.add(offer('Member Registration', money(price99(base), country), country, 'primary'));
+    offers.add(offer('Non-member Registration', money(price99(base * 1.25), country), country, 'primary'));
+    offers.add(offer('Student Registration', money(price99(base * 0.4), country), country, 'discount'));
+  } else {
+    Map eb = offer('Early Bird', money(price99(base * 0.75), country), country, 'discount');
+    eb.validThrough = utc(start.minusDays(60)); offers.add(eb);
+    offers.add(offer('Regular', money(price99(base), country), country, 'primary'));
+    offers.add(offer('Student', money(price99(base * 0.35), country), country, 'discount'));
+    if (chance(s, 0.4)) offers.add(offer('Workshop Add-on', money(price99(base * 0.4), country), country, 'add-on'));
+  }
+  if (mode == 'OnlineEventAttendanceMode') { offers.clear(); offers.add(offer('Virtual Pass', money(price99(base * 0.3), country), country, 'primary')); }
+  ZonedDateTime cfpEnd = start.minusDays(ri(s, 70, 110));
+  cfp = ['@type': 'CallForProposals', 'callType': acadm ? 'papers' : 'talks', 'url': url + '/cfp',
+         'availabilityStarts': utc(cfpEnd.minusDays(ri(s, 60, 120))), 'availabilityEnds': utc(cfpEnd), 'notificationDate': utc(cfpEnd.plusDays(21)),
+         'submissionTypes': acadm ? ['full-paper', 'short-paper', 'poster'] : sample(s, ['talk', 'workshop', 'lightning-talk', 'panel'], ri(s, 2, 3)),
+         'speakerCompensation': acadm ? 'none' : pick(s, ['none', 'honorarium', 'unknown']),
+         'travelSupport': pick(s, acadm ? ['none', 'partial'] : ['none', 'partial', 'full', 'on-request']), 'ticketIncluded': !acadm];
+  cap = acadm ? imin(v.cap, ri(s, 200, 1200)) : imin(v.cap, ri(s, 300, 4000));
+  fillHi = 0.95; attMethod = 'reported';
+  desc = (acadm ? name + ' brings together researchers and practitioners' : brand + ' brings together engineers and practitioners')
+         + ' for ' + nDays + (nDays == 1 ? ' day' : ' days') + ' of talks and workshops on ' + topic.label + ' in ' + v.city + '.';
+  coc = url + '/code-of-conduct';
+}
+else if (cat == 'expo') {
+  type = 'ExhibitionEvent'; labels.addAll(expo.labels); labels.add('expo');
+  srcNames.add('predicthq'); if (chance(s, 0.5)) srcNames.add('eventbrite');
+  nDays = ri(s, 2, 3);
+  start = at(day, '10:00', tz); end = at(day.plusDays(nDays - 1), '16:00', tz);
+  name = expo.name + ' ' + year;
+  superEv = ['@id': 'urn:ue:series:' + slug(expo.name), '@type': 'EventSeries', 'name': expo.name, 'seriesType': 'edition-series'];
+  offers.add(offer('Trade Visitor (registration required)', 0.0, country, 'registration'));
+  offers.add(offer('Conference Pass', money(price99(ri(s, 150, 450)), country), country, 'primary'));
+  for (def sp : sample(s, C.companies, ri(s, 3, 5))) sponsors.add(['@type': 'Organization', 'name': sp]);
+  url = 'https://' + slug(expo.name) + '.example/' + year;
+  ZonedDateTime cfpEnd = start.minusDays(ri(s, 45, 90));
+  cfp = ['@type': 'CallForProposals', 'callType': 'exhibitors', 'url': url + '/exhibit', 'availabilityStarts': utc(cfpEnd.minusDays(180)),
+         'availabilityEnds': utc(cfpEnd), 'submissionTypes': ['booth', 'sponsorship']];
+  cap = imin(v.cap, ri(s, 2000, 20000)); fillLo = 0.5;
+  orgName = pick(s, ['Northfield Exhibitions', 'Messe Nord GmbH', 'Meridian Trade Events']);
+  desc = expo.name + ' showcases ' + String.join(', ', expo.labels) + ' suppliers and buyers at ' + v.name + ', ' + v.city + '.';
+}
+else if (cat == 'meetup') {
+  type = 'SocialEvent'; labels.add(tk); ticketed = false;
+  String group = v.city + ' ' + topic.label + ' Meetup';
+  srcNames.add(pick(s, ['meetup', 'meetup', 'luma']));
+  startTime = pick(s, ['18:00', '18:30']); start = at(day, startTime, tz); end = start.plusMinutes(150);
+  double r = rnd(s);
+  if (r < 0.6) {
+    String talk = pick(s, topic.talks); name = group + ': ' + talk;
+    Map sp = person(s, C, false); performers.add(role('speaker', 1, sp));
+    desc = sp.name + ' (' + sp.description + ') presents "' + talk + '". Doors at ' + startTime + ', talk at ' + start.plusMinutes(30).toLocalTime() + ', then pizza and networking.';
+  } else if (r < 0.85) {
+    name = group + ' — Lightning Talks';
+    for (int k = 0; k < 3; k++) performers.add(role('speaker', k + 1, person(s, C, false)));
+    desc = 'Three short talks from local practitioners, followed by networking. Speakers: ' + performers.get(0).name + ', ' + performers.get(1).name + ', ' + performers.get(2).name + '.';
+  } else {
+    name = v.city + ' Hack Night #' + ri(s, 12, 140); labels.add('hack-night'); end = start.plusMinutes(180);
+    desc = 'Bring a laptop and a project. Open co-working and pairing for ' + topic.label + ' folks of all levels.';
+  }
+  superEv = ['@id': 'urn:ue:series:' + slug(group), '@type': 'EventSeries', 'name': group, 'seriesType': 'recurring'];
+  double rm = rnd(s);
+  mode = rm < 0.8 ? 'OfflineEventAttendanceMode' : (rm < 0.95 ? 'MixedEventAttendanceMode' : 'OnlineEventAttendanceMode');
+  if (chance(s, 0.1)) { ticketed = true; offers.add(offer('Pizza & Drinks Contribution', money(ri(s, 5, 15), country), country, 'primary')); }
+  else offers.add(offer('Free RSVP', 0.0, country, 'registration'));
+  if (chance(s, 0.3)) cfp = ['@type': 'CallForProposals', 'callType': 'talks', 'url': 'https://www.meetup.example/' + slug(group) + '/talk-submissions',
+                             'submissionTypes': ['talk', 'lightning-talk'], 'speakerCompensation': 'none', 'ticketIncluded': true];
+  cap = imin(v.cap, ri(s, 40, 150)); fillLo = 0.5; attMethod = 'reported';
+  orgName = group; url = 'https://www.meetup.example/' + slug(group) + '/events/' + rid(s, DIGITS, 9);
+}
+else if (cat == 'community') {
+  type = 'SocialEvent'; labels.addAll(ctpl.labels); ticketed = false;
+  name = ctpl.title.replace('{city}', v.city).replace('{venue}', v.name);
+  srcNames.add(pick(s, ['eventbrite', 'luma', 'predicthq']));
+  startTime = pick(s, ctpl.times); start = at(day, startTime, tz); end = start.plusMinutes(ctpl.mins);
+  offers.add(offer('Free', 0.0, country, 'registration'));
+  cap = v.style == 'park' ? imin(v.cap, ri(s, 200, 2000)) : imin(v.cap, ri(s, 30, 120)); fillLo = 0.4; attMethod = 'modeled';
+  orgName = v.style == 'park' ? 'Friends of ' + v.name : v.name;
+  desc = name + ' at ' + v.name + ', ' + v.city + '. Free and open to everyone.';
+  url = 'https://' + vslug + '.example/calendar/' + slug(name) + '-' + day;
+}
+else { // screening
+  type = 'ScreeningEvent'; labels.add('film'); if (fmt.contains('Documentary')) labels.add('documentary');
+  tm = ['Film', 'Film', 'Screening'];
+  name = fmt.replace('{film}', film);
+  srcNames.add(pick(s, ['eventbrite', 'luma']));
+  startTime = fmt.contains('Outdoor') ? '20:30' : pick(s, ['19:00', '19:30', '20:00']);
+  start = at(day, startTime, tz); doors = start.minusMinutes(30); end = start.plusMinutes(fmt.contains('Q&A') ? 150 : 120);
+  if (fmt.contains('Q&A') || fmt.contains('Premiere')) { Map dir = person(s, C, false); dir.description = 'Director of ' + film; performers.add(role('director', 1, dir)); }
+  if (v.style == 'room') { ticketed = false; offers.add(offer('Free', 0.0, country, 'registration')); cap = imin(v.cap, ri(s, 60, 200)); }
+  else { double base = ri(s, 10, 18); offers.add(offer('General Admission', money(base, country), country, 'primary')); offers.add(offer('Student / Senior', money(base * 0.75, country), country, 'discount')); cap = v.cap; fillLo = 0.3; }
+  orgName = v.city + ' Film Society';
+  desc = 'A screening of ' + film + ' at ' + v.name + (fmt.contains('Q&A') ? ', followed by a Q&A with the director.' : '.');
+  url = 'https://' + slug(v.city) + '-film-society.example/screenings/' + slug(film) + '-' + day;
+}
+
+// ---------------- status ----------------
+String status = 'EventScheduled'; ZonedDateTime prevStart = null; boolean tentative = false; String cancelReason = null;
+boolean past = end.isBefore(NOW);
+double rs = rnd(s);
+if (rs < 0.04) { status = 'EventCancelled'; cancelReason = pick(s, C.cancelReasons); }
+else if (!past && rs < 0.07) { status = 'EventPostponed'; tentative = true; }
+else if (!past && rs < 0.10) { status = 'EventRescheduled'; prevStart = start.minusDays(ri(s, 7, 60)); }
+else if (!past && rs < 0.12 && (cat == 'conference' || cat == 'meetup' || cat == 'academic') && mode != 'OnlineEventAttendanceMode') { status = 'EventMovedOnline'; mode = 'OnlineEventAttendanceMode'; }
+
+// ---------------- location ----------------
+List location = new ArrayList();
+if (mode != 'OnlineEventAttendanceMode') {
+  Map addr = ['@type': 'PostalAddress', 'streetAddress': v.street, 'addressLocality': v.city, 'postalCode': v.postal, 'addressCountry': v.country];
+  put(addr, 'addressRegion', v.region);
+  Map place = ['@id': 'urn:ue:place:' + v.id, '@type': v.type, 'name': v.name, 'address': addr,
+               'geo': ['@type': 'GeoCoordinates', 'latitude': v.lat, 'longitude': v.lon], 'maximumAttendeeCapacity': v.cap,
+               'accessType': ticketed ? 'ticketed' : (cat == 'community' && v.style == 'park' ? 'public' : 'registered')];
+  if (v.dma != null) place.marketArea = [['system': 'nielsen-dma', 'name': v.dma, 'code': C.dmaCodes[v.dma]]];
+  location.add(place);
+}
+if (mode != 'OfflineEventAttendanceMode') location.add(['@type': 'VirtualLocation', 'url': url + '/live', 'platform': pick(s, C.streamPlatforms)]);
+if (mode == 'OnlineEventAttendanceMode') cap = imax(cap, ri(s, 500, 5000));
+
+// ---------------- capacity / attendance ----------------
+int expected = (int)Math.round(cap * (fillLo + rnd(s) * (fillHi - fillLo)));
+long daysOut = ChronoUnit.DAYS.between(NOW, start);
+double soldFrac = past ? 1.0 : Math.min(1.0, Math.max(0.15, 1.0 - daysOut / 200.0) * (0.85 + 0.3 * rnd(s)));
+int remaining = imax(0, cap - (int)Math.round(expected * soldFrac));
+if (!past && remaining > 0 && remaining < cap * 0.02) remaining = 0;
+
+// ---------------- offers ----------------
+ZonedDateTime onsale = start.minusDays(ri(s, 45, 150));
+String ticketUrl = url + '/tickets';
+for (def o : offers) {
+  String av;
+  if (status == 'EventCancelled' || past) av = 'Discontinued';
+  else if (NOW.isBefore(onsale)) av = 'PreSale';
+  else if (remaining == 0) av = 'SoldOut';
+  else if (remaining < cap * 0.1) av = 'LimitedAvailability';
+  else av = 'InStock';
+  o.availability = av; o.availabilityStarts = utc(onsale); o.url = ticketUrl;
+  if (cat == 'concert' || cat == 'comedy' || cat == 'sports' || cat == 'festival') o.eligibleQuantityMax = 8;
+}
+boolean free = true;
+for (def o : offers) { if ((o.price != null && o.price > 0) || (o.lowPrice != null && o.lowPrice > 0)) free = false; }
+
+// ---------------- provenance ----------------
+ZonedDateTime lastUpdated = NOW.minusHours(ri(s, 1, 240));
+ZonedDateTime firstSeen = lastUpdated.minusDays(ri(s, 2, 200));
+if (firstSeen.isAfter(start)) firstSeen = start.minusDays(ri(s, 14, 120));
+List sources = new ArrayList();
+for (def sn : srcNames) {
+  String sid;
+  if (sn == 'ticketmaster') sid = 'vvG1' + rid(s, ALNUM, 10);
+  else if (sn == 'eventbrite') sid = rid(s, DIGITS, 12);
+  else if (sn == 'meetup' || sn == 'bandsintown') sid = rid(s, DIGITS, 9);
+  else if (sn == 'luma') sid = 'evt-' + rid(s, ALNUM, 14);
+  else if (sn == 'sessionize') sid = rid(s, DIGITS, 5);
+  else if (sn == 'wikicfp') sid = rid(s, DIGITS, 6);
+  else if (sn == 'confs-tech') sid = slug(name);
+  else sid = rid(s, ALNUM, 18);
+  Map src = ['source': sn, 'sourceId': sid, 'url': 'https://' + sn + '.example/e/' + sid,
+             'confidence': Math.round((0.82 + rnd(s) * 0.17) * 1000) / 1000.0, 'retrievedAt': utc(lastUpdated)];
+  if (sn == 'confs-tech') src.license = 'MIT';
+  sources.add(src);
+}
+String primary = srcNames.get(0);
+Map fieldSources = ['/startDate': primary, '/expectedAttendance': srcNames.contains('predicthq') ? 'predicthq' : primary];
+if (!performers.isEmpty()) fieldSources['/performer'] = primary;
+Map tmSeg = ['Music': 'KZFzniwnSyZfZ7v7nJ', 'Sports': 'KZFzniwnSyZfZ7v7nE', 'Arts & Theatre': 'KZFzniwnSyZfZ7v7na', 'Film': 'KZFzniwnSyZfZ7v7nn'];
+
+// ---------------- assemble ----------------
+Map d = new LinkedHashMap();
+d['@context'] = 'https://example.org/unified-event/0.1/context.jsonld';
+// Editions (festival/conference/academic/expo + year) get a canonical id so repeat records of the
+// same edition collapse into one doc, as an aggregator would merge the same event from several sources.
+boolean edition = cat == 'festival' || cat == 'conference' || cat == 'academic' || cat == 'expo';
+d['@id'] = 'urn:ue:event:' + slug(name) + (edition ? '' : '-' + start.toLocalDate() + '-' + rid(s, HEX, 4));
+d['@type'] = type;
+d.name = name; d.description = desc; d.category = cat; d.labels = labels; d.url = url;
+d.eventStatus = status; d.eventAttendanceMode = mode;
+d.startDate = iso(start); d.endDate = iso(end); put(d, 'doorTime', doors == null ? null : iso(doors));
+if (prevStart != null) d.previousStartDate = [iso(prevStart)];
+if (nDays == 1) d.predictedEnd = iso(end.plusMinutes(ri(s, -10, 25)));
+d.timezone = v.tz; d.datePrecision = 'datetime'; d.datesTentative = tentative;
+d['@timestamp'] = utc(start);
+d.location = location;
+d.isAccessibleForFree = free; put(d, 'typicalAgeRange', age);
+List langs = new ArrayList(pick(s, country.langs)); if (forceEn && !langs.contains('en')) langs.add('en');
+d.inLanguage = langs;
+d.maximumAttendeeCapacity = cap; d.remainingAttendeeCapacity = remaining;
+d.expectedAttendance = ['value': expected, 'basis': nDays > 1 ? 'total' : 'daily', 'method': attMethod,
+                        'source': srcNames.contains('predicthq') ? 'predicthq' : primary, 'asOf': utc(lastUpdated)];
+if (!performers.isEmpty()) d.performer = performers;
+if (!offers.isEmpty()) d.offers = offers;
+d.organizer = ['@type': 'Organization', 'name': orgName];
+if (!sponsors.isEmpty()) d.sponsor = sponsors;
+put(d, 'superEvent', superEv);
+if (!subs.isEmpty()) d.subEvent = subs;
+if (cfp != null) d.hasParticipationOffer = [cfp];
+if (cancelReason != null) d.additionalProperty = [['name': 'cancellationReason', 'value': cancelReason, 'source': primary]];
+if (!identifiers.isEmpty()) d.identifier = identifiers;
+put(d, 'codeOfConductUrl', coc);
+d.sources = sources; d.fieldSources = fieldSources;
+if (tm != null && srcNames.contains('ticketmaster')) d.sourceClassifications = [['source': 'ticketmaster', 'path': tm, 'ids': [tmSeg[tm.get(0)]]]];
+d.firstSeen = utc(firstSeen); d.lastUpdated = utc(lastUpdated);
+d.synthetic = true;
+
+for (def k : new ArrayList(ctx.keySet())) { if (!k.startsWith('_')) ctx.remove(k); }
+ctx.putAll(d);
+ctx._id = d['@id'];
