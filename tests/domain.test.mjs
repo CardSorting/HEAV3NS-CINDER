@@ -11,6 +11,7 @@ import { Session, SOCIAL_SESSION_TYPES } from "../src/domain/agenda.mjs";
 import { explainMatchRelevance } from "../src/domain/relevanceScore.mjs";
 import { ConferenceEvent, SELECTABLE_CATEGORIES } from "../src/domain/conferenceEvent.mjs";
 import { VenueSpace, findMentionedSpace } from "../src/domain/venueSpace.mjs";
+import { Announcement } from "../src/domain/announcement.mjs";
 import { IElasticsearchClient } from "../src/domain/interfaces/IElasticsearchClient.mjs";
 
 describe("Domain Entities", () => {
@@ -259,5 +260,36 @@ describe("VenueSpace entity", () => {
   it("requires an owner and a valid capacity", () => {
     assert.throws(() => new VenueSpace({ id: "s", name: "x" }), /venueId.*or an event/);
     assert.throws(() => new VenueSpace({ id: "s", name: "x", venueId: V, capacity: -1 }), /non-negative/);
+  });
+});
+
+describe("Announcement entity", () => {
+  const props = {
+    id: "ann_1", eventId: "urn:ue:event:devsummit-2026", publishAt: "2026-12-23T11:55:00-07:00",
+    title: "Room change: Platform Teams as Product Teams", body: "Moves to Ballroom B.", kind: "room-change", severity: "important",
+    affects: { sessionIds: ["ses_a"], spaceIds: ["space:sp:ballroom-a", "space:sp:ballroom-b"] }
+  };
+
+  it("is published once the clock passes publishAt", () => {
+    const a = new Announcement(props);
+    assert.strictEqual(a.isPublishedAt(Date.parse("2026-12-23T18:50:00Z")), false);
+    assert.strictEqual(a.isPublishedAt(Date.parse("2026-12-23T18:55:00Z")), true);
+  });
+
+  it("detects whether it affects given sessions or spaces", () => {
+    const a = new Announcement(props);
+    assert.strictEqual(a.affectsAny({ sessionIds: ["ses_x", "ses_a"] }), true);
+    assert.strictEqual(a.affectsAny({ spaceIds: ["space:sp:ballroom-b"] }), true);
+    assert.strictEqual(a.affectsAny({ sessionIds: ["ses_x"], spaceIds: ["space:sp:tech-cafe"] }), false);
+    assert.strictEqual(a.isScheduleChange(), true);
+  });
+
+  it("round-trips and validates kind, severity and publishAt", () => {
+    const a = new Announcement(props);
+    assert.deepStrictEqual(new Announcement(a.toJSON()).toJSON(), a.toJSON());
+    assert.throws(() => new Announcement({ ...props, kind: "rumour" }), /kind must be one of/);
+    assert.throws(() => new Announcement({ ...props, severity: "meh" }), /severity must be one of/);
+    assert.throws(() => new Announcement({ ...props, publishAt: "soon" }), /publishAt/);
+    assert.throws(() => new Announcement({ ...props, eventId: "" }), /eventId/);
   });
 });
