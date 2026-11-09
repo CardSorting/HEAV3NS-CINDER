@@ -1,0 +1,8 @@
+# [LAYER: INFRASTRUCTURE]
+# HEAV3NS-JOY (.joyignore) — Paths excluded from Joyzoning & Spider audits
+node_modules/**
+dist/**
+build/**
+coverage/**
+.broccolidb/**
+*.min.js

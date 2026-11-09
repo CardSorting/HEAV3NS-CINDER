@@ -1,0 +1,263 @@
+<!-- [LAYER: UI] -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CINDER — The Social Infrastructure for Conferences</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-logo">CINDER</div>
+        <div class="brand-badge">Conferences, Together</div>
+      </div>
+
+      <div class="header-actions">
+        <div class="es-status-chip">
+          <span class="dot"></span>
+          <span id="es-mode-text">ES: CONNECTED</span>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <span style="font-size:0.75rem; color:var(--text-muted);">Simulate Attendee:</span>
+          <select id="attendee-select" style="background:var(--bg-card); color:#fff; border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:0.8rem; outline:none;"></select>
+        </div>
+
+        <button class="btn-spectacle" id="btn-run-story">
+          <span>▶</span> Run Hackathon Demo Story
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Top Demo Banner -->
+    <div class="demo-banner">
+      <div class="demo-banner-content">
+        <h2>Intelligent, Agent-Facilitated Social Coordination</h2>
+        <p>Elasticsearch powers semantic discovery, hybrid ranking & Pod formation. The AI Facilitator orchestrates the human experience.</p>
+      </div>
+
+      <div class="nav-tabs">
+        <button class="tab-btn active" data-tab="tab-discover">🔍 Discover & Swipe</button>
+        <button class="tab-btn" data-tab="tab-pods">💬 Pods & Channels</button>
+        <button class="tab-btn" data-tab="tab-agenda">📅 Conference Agenda</button>
+      </div>
+    </div>
+
+    <!-- Milestones Progress Tracker -->
+    <div class="milestones-strip">
+      <div class="milestone-badge done" id="ms-1">
+        <span class="ms-num">Milestone 01</span>
+        <span class="ms-title">Check In & Index</span>
+      </div>
+      <div class="milestone-badge" id="ms-2">
+        <span class="ms-num">Milestone 02</span>
+        <span class="ms-title">Semantic Discover</span>
+      </div>
+      <div class="milestone-badge" id="ms-3">
+        <span class="ms-num">Milestone 03</span>
+        <span class="ms-title">Form Curated Pods</span>
+      </div>
+      <div class="milestone-badge" id="ms-4">
+        <span class="ms-num">Milestone 04</span>
+        <span class="ms-title">Pod Communication</span>
+      </div>
+      <div class="milestone-badge" id="ms-5">
+        <span class="ms-num">Milestone 05</span>
+        <span class="ms-title">AI Facilitator</span>
+      </div>
+    </div>
+
+    <!-- TAB 1: DISCOVER & SWIPE -->
+    <div class="tab-panel active" id="tab-discover">
+      <div class="discover-grid">
+        <!-- Swipe Card Container -->
+        <div class="swipe-card-container">
+          <!-- Active Card -->
+          <div class="swipe-card" id="swipe-card-element">
+            <div class="card-header-visual">
+              <img id="card-avatar" class="card-avatar" src="" alt="Avatar">
+              <div class="card-identity">
+                <h3 id="card-name">Attendee Name</h3>
+                <p id="card-headline">Title @ Company</p>
+              </div>
+              <div style="margin-left:auto;">
+                <span class="brand-badge" id="card-score" style="background:rgba(0,255,170,0.15); color:var(--accent-green); border-color:var(--accent-green);">95% Match</span>
+              </div>
+            </div>
+
+            <div class="card-body">
+              <!-- Why you match badge -->
+              <div class="why-match-box">
+                <div class="label">Why You Match (Elasticsearch Relevance)</div>
+                <div class="headline" id="card-why-headline">Shared focus on Kubernetes & eBPF</div>
+                <div class="details" id="card-why-details">Both exploring kernel-level telemetry and auto-remediation controllers.</div>
+              </div>
+
+              <div>
+                <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Technical Interests & Expertise</div>
+                <div class="tags-row" id="card-tags"></div>
+              </div>
+
+              <div>
+                <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Current Project</div>
+                <p style="font-size:0.85rem; color:var(--text-secondary);" id="card-projects"></p>
+              </div>
+
+              <div>
+                <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Looking For</div>
+                <p style="font-size:0.85rem; color:var(--accent-cyan);" id="card-looking"></p>
+              </div>
+            </div>
+
+            <div class="card-actions">
+              <button class="btn-swipe btn-pass" id="btn-pass">✕ Pass</button>
+              <button class="btn-swipe btn-connect" id="btn-connect">⚡ Connect & Match</button>
+            </div>
+          </div>
+
+          <!-- Empty Card -->
+          <div class="swipe-card" id="no-candidates-card" style="display:none; padding:3rem; text-align:center; align-items:center;">
+            <div style="font-size:2.5rem; margin-bottom:1rem;">🎉</div>
+            <h3 style="font-size:1.2rem; color:#fff; margin-bottom:0.5rem;">All Candidates Reviewed!</h3>
+            <p style="font-size:0.85rem; color:var(--text-secondary); max-width:320px;">
+              You have swiped through all attendees for your profile. Your mutual matches are being organized into Pods.
+            </p>
+          </div>
+        </div>
+
+        <!-- ES Inspector Drawer -->
+        <div class="es-inspector">
+          <h4>
+            <span>Elasticsearch Query</span>
+            <span id="es-score-stats" style="font-size:0.7rem; color:var(--text-muted);">Latency: --ms</span>
+          </h4>
+          <div style="font-size:0.75rem; color:var(--text-secondary);">
+            Hybrid Search combining BM25 keyword query + dense_vector kNN search via Reciprocal Rank Fusion (RRF).
+          </div>
+          <pre class="es-query-box" id="es-query-json">// Awaiting query...</pre>
+          <div style="font-size:0.72rem; color:var(--text-muted); line-height:1.4;">
+            Index: <code>cinder_attendees</code> | Mappings: <code>dense_vector(dims=32, cosine)</code>, <code>text</code>, <code>keywords</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: PODS & CHANNELS -->
+    <div class="tab-panel" id="tab-pods">
+      <div class="pod-view-container">
+        <!-- Sidebar -->
+        <div class="pod-sidebar">
+          <div style="font-size:0.8rem; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--accent-cyan);">
+            Your Active Pods
+          </div>
+          <div id="pod-list" style="display:flex; flex-direction:column; gap:0.5rem;">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="pod-chat-main">
+          <div class="pod-chat-header">
+            <div>
+              <h3 id="pod-title" style="font-size:1rem; color:#fff;">Pod 07: Autonomous Cloud & Systems</h3>
+              <p id="pod-members-subtitle" style="font-size:0.75rem; color:var(--text-secondary);">5 Members • Facilitator: CINDER Facilitator (AI)</p>
+            </div>
+            <div class="brand-badge" style="background:rgba(240,0,255,0.15); color:var(--accent-magenta); border-color:var(--accent-magenta);">
+              AI Facilitator Active
+            </div>
+          </div>
+
+          <!-- Pinned Meetup Banner -->
+          <div class="pinned-meetup-strip" id="pinned-meetup-bar" style="display:none;">
+            <span id="pinned-meetup-text">📌 Pinned Meetup: Main Hall East Patio at 12:15 PM</span>
+          </div>
+
+          <!-- Messages Stream -->
+          <div class="chat-messages" id="chat-messages-container">
+            <!-- Populated dynamically -->
+          </div>
+
+          <!-- Chat Input -->
+          <div class="chat-input-bar">
+            <input type="text" id="chat-input" placeholder="Type a message or ask the AI facilitator...">
+            <button id="chat-send-btn">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: CONFERENCE AGENDA -->
+    <div class="tab-panel" id="tab-agenda">
+      <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-lg); padding:1.5rem;">
+        <h3 style="color:#fff; margin-bottom:1rem;">Cloud & AI Summit 2026 — Conference Agenda</h3>
+        <div style="display:flex; flex-direction:column; gap:1rem;">
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:1rem;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
+              <span style="font-weight:700; color:var(--accent-cyan);">09:00 - 10:00 • Main Auditorium (Hall A)</span>
+              <span class="tag">Keynote</span>
+            </div>
+            <h4 style="color:#fff;">Opening Keynote: The Intelligent Cloud</h4>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">Dr. Sarah Jenkins — The shift from passive monitoring to autonomous infrastructure.</p>
+          </div>
+
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:1rem;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
+              <span style="font-weight:700; color:var(--accent-cyan);">10:15 - 11:00 • Room 204</span>
+              <span class="tag">Observability</span>
+            </div>
+            <h4 style="color:#fff;">Next-Gen Observability: Kernel eBPF Telemetry in Practice</h4>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">Maya Lin — How eBPF delivers deep kernel-level visibility without code modification.</p>
+          </div>
+
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:1rem;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
+              <span style="font-weight:700; color:var(--accent-cyan);">11:15 - 12:00 • Room 301</span>
+              <span class="tag">AI & Agents</span>
+            </div>
+            <h4 style="color:#fff;">Autonomous Agents in Production: Coordination & Governance</h4>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">Jordan Taylor — Designing reliable multi-agent systems in Kubernetes.</p>
+          </div>
+
+          <div style="background:var(--bg-card); border:1px solid var(--accent-yellow); border-radius:8px; padding:1rem; box-shadow:0 0 15px rgba(255,183,3,0.1);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
+              <span style="font-weight:700; color:var(--accent-yellow);">12:15 - 13:15 • Main Hall East Patio / Tech Cafe</span>
+              <span class="tag accent" style="border-color:var(--accent-yellow); color:var(--accent-yellow);">Pod Networking</span>
+            </div>
+            <h4 style="color:#fff;">Curated Pod Networking & Lunch Meetup</h4>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">Facilitated by CINDER — Connect with your curated Pod members for structured collaboration.</p>
+          </div>
+
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:1rem;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
+              <span style="font-weight:700; color:var(--accent-cyan);">13:30 - 14:30 • Main Auditorium (Hall A)</span>
+              <span class="tag">Autonomous Cloud</span>
+            </div>
+            <h4 style="color:#fff;">Keynote: The Autonomous Cloud — From Telemetry to Self-Healing Systems</h4>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">Alex Chen, Marcus Vance — Bridging observability, distributed consensus, and automated remediation.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal for Story Runner -->
+  <div class="modal-overlay" id="story-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="color:var(--accent-cyan);">CINDER Hackathon 10-Step Story Demonstration</h3>
+        <button id="btn-close-modal" style="background:none; border:none; color:#fff; font-size:1.2rem; cursor:pointer;">✕</button>
+      </div>
+      <div class="modal-stepper" id="story-stepper">
+        <!-- Steps appear here dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

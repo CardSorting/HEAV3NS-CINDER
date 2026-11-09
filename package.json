@@ -1,0 +1,25 @@
+{
+  "name": "cinder-conference",
+  "version": "1.0.0",
+  "description": "CINDER — The Social Infrastructure for Conferences. Intelligent, agent-facilitated social coordination platform.",
+  "type": "module",
+  "main": "src/core/CinderApp.mjs",
+  "scripts": {
+    "start": "node bin/server.mjs",
+    "demo": "node bin/demo.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node /Users/bozoegg/Desktop/HEAV3NS-JOY/bin/joy-check.mjs ."
+  },
+  "keywords": [
+    "cinder",
+    "elasticsearch",
+    "conference",
+    "networking",
+    "ai-agent",
+    "vector-search",
+    "hybrid-retrieval",
+    "pods"
+  ],
+  "author": "Cinder Team",
+  "license": "MIT"
+}
