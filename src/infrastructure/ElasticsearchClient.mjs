@@ -69,6 +69,9 @@ export class ElasticsearchClient extends IElasticsearchClient {
     this.chatModel = options.chatModel || DEFAULT_CHAT_MODEL;
     this.indexName = options.indexName || "cinder_attendees";
     this.timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+    // Local clusters answer in milliseconds; cloud clusters (API key) can take ~0.5-0.8s for GET /.
+    this.healthTimeoutMs = options.healthTimeoutMs || (this.apiKey ? 2000 : 250);
+    this.lastHealthError = null;
     this.fetchImpl = options.fetchImpl || ((...args) => fetch(...args));
     this.isLiveCluster = false;
     this.clusterInfo = null;
@@ -157,24 +160,31 @@ export class ElasticsearchClient extends IElasticsearchClient {
 
   /**
    * Fast health check probe for Elasticsearch cluster with bounded timeout.
-   * @param {number} [timeoutMs=250]
+   *
+   * Probes `GET /` (cluster info), which every deployment answers, including Elastic Serverless where
+   * `/_cluster/health` returns 410 Gone. Any authenticated 2xx means the cluster is live; serverless has
+   * no shard-health colour, so a reachable cluster reports "green".
+   * @param {number} [timeoutMs] Defaults to `healthTimeoutMs` (250ms local, 2000ms for API-key/cloud clusters).
    */
-  async checkHealth(timeoutMs = 250) {
+  async checkHealth(timeoutMs = this.healthTimeoutMs) {
     const start = performance.now();
     try {
-      const data = await this.request("GET", "/_cluster/health", { timeoutMs });
+      const data = await this.request("GET", "/", { timeoutMs });
       const latencyMs = Number((performance.now() - start).toFixed(2));
       this.isLiveCluster = true;
       this.clusterInfo = data;
       return {
         live: true,
-        status: data.status || "green",
+        status: "green",
         clusterName: data.cluster_name || "elasticsearch",
+        version: data.version?.number || null,
+        serverless: data.version?.build_flavor === "serverless",
         mode: "live-elasticsearch-cluster",
         latencyMs
       };
-    } catch {
-      // Cluster offline or unreachable - seamless embedded fallback
+    } catch (err) {
+      // Cluster offline, unreachable or rejecting credentials - seamless embedded fallback
+      this.lastHealthError = err instanceof ElasticsearchError ? `${err.status} ${err.type}` : String(err?.message || err);
     }
 
     this.isLiveCluster = false;
@@ -191,7 +201,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * Ensures the index and mappings exist in live cluster or embedded engine.
    */
   async ensureIndex() {
-    const health = await this.checkHealth(250);
+    const health = await this.checkHealth();
 
     if (this.isLiveCluster) {
       try {
@@ -375,7 +385,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
    */
   async getStatus() {
     return {
-      status: this.isLiveCluster ? (this.clusterInfo?.status || "green") : "green",
+      status: "green",
       clusterName: this.isLiveCluster ? (this.clusterInfo?.cluster_name || "cinder-live-es") : "cinder-es-cluster",
       docCount: this.docs.size,
       mode: this.isLiveCluster ? "live-cluster" : "embedded-es-engine",
