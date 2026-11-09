@@ -3,4 +3,5 @@ node_modules/
 .dietcode/
 .joy-state/
 *.log
+src/ui/web/react/dist/
 

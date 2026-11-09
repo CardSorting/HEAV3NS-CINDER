@@ -11,7 +11,7 @@
 
 [![CI](https://img.shields.io/badge/build-passing-brightgreen.svg)](docs/CI_INTEGRATION.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Node >=18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
+![Node >=22.12](https://img.shields.io/badge/node-%3E%3D22.12-brightgreen)
 ![Elasticsearch: Dual Mode](https://img.shields.io/badge/elasticsearch-live%20%7C%20embedded-orange)
 ![Joyzoning: Sovereign](https://img.shields.io/badge/joyzoning-100%25%20sovereign-success)
 [![Docs](https://img.shields.io/badge/docs-diátaxis%20portal-purple.svg)](docs/README.md)
@@ -202,8 +202,10 @@ Elasticsearch is the foundation of CINDER's intelligence, operating in **Dual Mo
 
 ## Quick Start (Under 2 Minutes)
 
+The React 19 + TypeScript frontend is served by Vite. With Node.js 22.12 or later, run `npm ci` and then `npm start`; open the Vite URL printed in the terminal (usually `http://localhost:5173`). The existing API and legacy UI remain at `http://localhost:3000`. For separate servers, production builds, and browser tests, see [React frontend](docs/REACT_FRONTEND.md).
+
 ### Prerequisites
-- Node.js 18+ (`node -v`)
+- Node.js 22.12+ (`node -v`)
 - Git
 - *(Optional)* Live Elasticsearch 8+ instance running on `http://localhost:9200` (if absent, embedded engine runs automatically).
 
@@ -214,15 +216,18 @@ Elasticsearch is the foundation of CINDER's intelligence, operating in **Dual Mo
 git clone https://github.com/CardSorting/elasticsearch.git
 cd elasticsearch
 
-# Run all automated tests (zero external npm dependencies required)
+# Install frontend and development dependencies
+npm ci
+
+# Run backend tests
 npm test
 
 # Run the 10-step hackathon demonstration scenario
 npm run demo
 
-# Launch the interactive web platform & API server
+# Launch the Vite frontend and API server
 npm start
-# Open http://localhost:3000 in your browser
+# Open the Vite URL printed in the terminal (usually http://localhost:5173)
 ```
 
 ---
@@ -246,18 +251,20 @@ Run `node bin/demo.mjs` or `npm run demo` to observe the complete attendee journ
 
 ## Interactive Web Platform
 
-Start the web server:
+Start the React frontend and API:
 ```bash
-node bin/server.mjs
-# Server listening on http://localhost:3000
+npm start
+# Frontend: http://localhost:5173; API and legacy UI: http://localhost:3000
 ```
 
-Navigate to `http://localhost:3000` to interact with:
+Navigate to the Vite URL to interact with:
 - **Attendee Discovery & Swipe UI:** Review attendee cards, inspect AI synergy breakdowns, and click **Like** or **Pass**.
 - **Interactive Pod Chat:** View Pod 07 channels, read the AI Facilitator's welcome message, and send real-time chat messages.
 - **Physical Meetup Coordination:** Propose a meeting point and observe the AI Facilitator verify and pin the meetup location.
-- **One-Click Scenario Runner:** Trigger the entire 10-step journey from the web UI and watch the event logs stream in real time.
-- **Elasticsearch Cluster Health:** Live status indicator showing cluster ping latency, active mode (live or embedded), document count, and index status.
+- **Connections and Agenda:** Exchange messages with mutual matches and browse the conference schedule.
+- **Activity and Profile:** Review live session updates and check in or update an attendee profile.
+
+The original interface, including its scenario runner and cluster health indicators, remains available at `http://localhost:3000`.
 
 ---
 
@@ -291,7 +298,7 @@ elasticsearch/
 ├── CLAUDE.md                  # Claude Code agent configuration
 ├── GEMINI.md                  # Gemini / Antigravity agent configuration
 ├── SOUL.md                    # Working principles and engineering ethos
-├── package.json               # Pure Node.js ESM configuration (zero external deps)
+├── package.json               # Node.js ESM and React/Vite frontend configuration
 ├── stability.config.json      # Joyzoning boundary configuration
 ├── bin/                       # UI: Command line executables
 │   ├── cinder.mjs             # Unified CLI router
