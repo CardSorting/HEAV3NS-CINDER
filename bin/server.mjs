@@ -1,34 +1,14 @@
 #!/usr/bin/env node
 /** [LAYER: UI] */
 
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { CinderWebServer } from "../src/ui/web/webServer.mjs";
 import { CliPresenter } from "../src/ui/cli/cliPresenter.mjs";
-import { CinderApp } from "../src/core/CinderApp.mjs";
-import { parseDotenv, mergeEnv, resolveElasticConfig } from "../src/plumbing/elasticConfig.mjs";
-import { clockFromEnv } from "../src/plumbing/clock.mjs";
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
-/** `.env` at the repo root (optional) merged with the process environment; process wins. */
-function loadEnvironment() {
-  const file = path.join(ROOT, ".env");
-  const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-  return mergeEnv(parseDotenv(text), process.env);
-}
+import { loadEnvironment, createAppFromEnv } from "../src/ui/cli/appFromEnv.mjs";
 
 async function main() {
   const env = loadEnvironment();
   const port = env.PORT ? parseInt(env.PORT, 10) : 3000;
-  const app = new CinderApp({
-    config: resolveElasticConfig(env),
-    clock: clockFromEnv(env),
-    defaultEventId: env.CINDER_DEMO_EVENT_ID || null,
-    forceOffline: /^(1|true|yes)$/i.test(env.CINDER_OFFLINE || "")
-  });
+  const app = createAppFromEnv({ env });
   const webServer = new CinderWebServer({ port, app });
 
   CliPresenter.banner();

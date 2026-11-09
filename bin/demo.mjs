@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** [LAYER: UI] */
 
-import { CinderApp } from "../src/core/CinderApp.mjs";
+import { createAppFromEnv } from "../src/ui/cli/appFromEnv.mjs";
 import { ScenarioRunner } from "../src/core/ScenarioRunner.mjs";
 import { CliPresenter } from "../src/ui/cli/cliPresenter.mjs";
 
@@ -9,7 +9,8 @@ async function main() {
   CliPresenter.banner();
   console.log("Starting CINDER Hackathon Demonstration Scenario (10 Continuous Steps)...\n");
 
-  const app = new CinderApp();
+  // Live demo event when .env configures a cluster; `npm run demo -- --offline` (or CINDER_OFFLINE=true) for seed data.
+  const app = createAppFromEnv({ forceOffline: process.argv.includes("--offline") });
   const runner = new ScenarioRunner(app);
 
   const result = await runner.runFullScenario({

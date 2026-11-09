@@ -29,6 +29,7 @@ python3 elasticsearch/setup.py pipelines|index|reindex|purge-synthetic   # event
 python3 elasticsearch/cinder/generate.py setup     # pipelines + any missing cinder-* indices (non-destructive)
 python3 elasticsearch/cinder/generate.py build     # generate, embed, bulk-load (~15 min; deterministic)
 python3 elasticsearch/cinder/generate.py reset     # delete synthetic:true docs from the reference indices
+npm run seed:demo [-- --event <id>]                # the five scripted demo attendees (app check-in path; idempotent)
 python3 elasticsearch/cinder/verify.py [eventId]   # smoke-test the app's queries
 python3 elasticsearch/cinder/compat_check.py [eventId]   # run after pulling src/ changes
 npm run eval:discovery [-- --event <id> --n 40 --quick]  # compare live discovery tunings (read-only)
