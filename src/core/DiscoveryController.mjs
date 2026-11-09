@@ -79,6 +79,7 @@ export class DiscoveryController {
         knnScore: hit.knnScore,
         bm25Rank: hit.bm25Rank,
         knnRank: hit.knnRank,
+        retrieverRanks: hit.retrieverRanks || null,
         explanation
       });
     }
@@ -87,6 +88,7 @@ export class DiscoveryController {
       targetAttendeeId: attendeeId,
       candidates,
       esQuerySpec: esResult.querySpec,
+      engine: esResult.engine || "embedded",
       tookMs: esResult.tookMs,
       totalFound: esResult.totalHits
     };

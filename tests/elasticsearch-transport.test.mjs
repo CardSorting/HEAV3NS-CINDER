@@ -211,7 +211,8 @@ describe("ElasticsearchClient live transport (mocked fetch)", () => {
   });
 
   it("live hybridSearch excludes self and swiped attendees inside every retriever", async () => {
-    const { impl, calls } = mockFetch(() => ({ body: { took: 5, hits: { total: { value: 1 }, hits: [{ _id: "att_x", _score: 0.5, _source: { id: "att_x" } }] } } }));
+    const { impl, calls } = mockFetch(() => ({ body: { took: 5, hits: { total: { value: 1 }, hits: [{ _id: "att_x", _score: 0.5, _source: { id: "att_x" },
+      _explanation: { description: "rrf score: [0.1] computed for initial ranks [3, 1, 2, -] with rankConstant: [60]" } }] } } }));
     const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, discoveryIndex: "cinder-registrations" });
     es.isLiveCluster = true;
     const res = await es.hybridSearch({
@@ -228,6 +229,12 @@ describe("ElasticsearchClient live transport (mocked fetch)", () => {
     }
     assert.strictEqual(res.engine, "elasticsearch");
     assert.strictEqual(res.hits[0].id, "att_x");
+    assert.strictEqual(JSON.parse(calls[0].body).explain, true);
+    assert.deepStrictEqual(res.hits[0].retrieverRanks, { bm25: 3, profile_knn: 1, looking_for_knn: 2, looking_for_bm25: null });
+    assert.strictEqual(res.hits[0].bm25Rank, 3);
+    assert.strictEqual(res.hits[0].knnRank, 1);
+    assert.strictEqual(res.querySpec.explain, true, "querySpec is the executed request");
+    assert.deepStrictEqual(res.querySpec.retrievers, ["bm25", "profile_knn", "looking_for_knn", "looking_for_bm25"]);
   });
 
   it("hybridSearch stays on the embedded engine without an event or when the cluster is down", async () => {

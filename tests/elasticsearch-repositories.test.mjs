@@ -13,7 +13,7 @@ import { ElasticsearchAgendaRepository, fromSessionDoc } from "../src/infrastruc
 import { ElasticsearchSpaceRepository } from "../src/infrastructure/ElasticsearchSpaceRepository.mjs";
 import { ElasticsearchAnnouncementRepository } from "../src/infrastructure/ElasticsearchAnnouncementRepository.mjs";
 import { ElasticsearchPromptRepository } from "../src/infrastructure/ElasticsearchPromptRepository.mjs";
-import { buildDiscoveryQuery } from "../src/infrastructure/discoveryRetriever.mjs";
+import { buildDiscoveryQuery, parseRetrieverRanks } from "../src/infrastructure/discoveryRetriever.mjs";
 
 const EV = "urn:ue:event:devsummit-2026";
 const MAPPINGS = JSON.parse(readFileSync(new URL("../elasticsearch/cinder/indices.json", import.meta.url), "utf8"));
@@ -318,3 +318,17 @@ describe("Live discovery retriever (buildDiscoveryQuery)", () => {
     assert.throws(() => buildDiscoveryQuery({ ...base, queryText: "", lookingForText: "" }), /needs query text/);
   });
 });
+
+describe("parseRetrieverRanks", () => {
+  const names = ["bm25", "profile_knn", "looking_for_knn", "looking_for_bm25"];
+  it("maps RRF explain initial ranks to retriever names", () => {
+    const explanation = { description: "rrf score: [0.0999] computed for initial ranks [27, 19, 2, 13] with rankConstant: [60] as sum of ..." };
+    assert.deepStrictEqual(parseRetrieverRanks(explanation, names), { bm25: 27, profile_knn: 19, looking_for_knn: 2, looking_for_bm25: 13 });
+  });
+  it("returns null for retrievers that did not return the hit and for missing explanations", () => {
+    assert.deepStrictEqual(parseRetrieverRanks({ description: "computed for initial ranks [-, 4, -, 1] with" }, names),
+      { bm25: null, profile_knn: 4, looking_for_knn: null, looking_for_bm25: 1 });
+    assert.deepStrictEqual(parseRetrieverRanks(undefined, ["bm25"]), { bm25: null });
+  });
+});
+

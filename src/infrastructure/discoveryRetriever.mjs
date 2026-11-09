@@ -7,6 +7,19 @@
  */
 export const DEFAULT_DISCOVERY_WEIGHTS = Object.freeze({ bm25: 1, profile_knn: 1, looking_for_knn: 3, looking_for_bm25: 2 });
 
+/**
+ * Reads each retriever's initial rank from an RRF hit explanation
+ * ("rrf score: [..] computed for initial ranks [27, 19, 2, 13] with rankConstant…").
+ * @param {Object|undefined} explanation - the hit's `_explanation`
+ * @param {string[]} names - retriever names in request order
+ * @returns {Record<string, number|null>} rank per retriever (null when that retriever did not return the hit)
+ */
+export function parseRetrieverRanks(explanation, names) {
+  const match = /initial ranks \[([^\]]*)\]/.exec(explanation?.description || "");
+  const ranks = match ? match[1].split(",").map((s) => Number.parseInt(s.trim(), 10)) : [];
+  return Object.fromEntries(names.map((name, i) => [name, Number.isFinite(ranks[i]) ? ranks[i] : null]));
+}
+
 /** Fields of other attendees that a `looking_for` text ("backend engineers who…") should match. */
 export const LOOKING_FOR_TARGET_FIELDS = Object.freeze(["title^3", "expertise^2", "interests", "bio"]);
 

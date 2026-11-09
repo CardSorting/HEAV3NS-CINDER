@@ -5,7 +5,7 @@ import { computeBM25Score, tokenizeText, calculateTermFrequencies } from "../plu
 import { cosineSimilarity } from "../plumbing/vectorMath.mjs";
 import { reciprocalRankFusion } from "../plumbing/rrfRanker.mjs";
 import { DEFAULT_EMBED_MODEL } from "../plumbing/elasticConfig.mjs";
-import { buildDiscoveryQuery } from "./discoveryRetriever.mjs";
+import { buildDiscoveryQuery, parseRetrieverRanks } from "./discoveryRetriever.mjs";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_CHAT_MODEL = ".anthropic-claude-5-sonnet-chat_completion";
@@ -60,6 +60,8 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * @param {number} [options.timeoutMs=5000] - Default per-request timeout
    * @param {string} [options.chatModel] - Chat-completion inference endpoint id
    * @param {typeof fetch} [options.fetchImpl] - Injectable fetch (tests)
+   * @param {boolean} [options.explainDiscovery=true] - ask Elasticsearch to explain discovery hits so each
+   *   candidate carries its rank in every retriever (adds some latency)
    * @param {string|null} [options.discoveryIndex=null] - registrations index for live discovery; when set
    *   and the cluster is live, hybridSearch runs an Elasticsearch RRF retriever instead of the embedded engine
    * @param {boolean} [options.legacyAttendeeIndex=true] - create/mirror the old 32-dim `cinder_attendees`
@@ -81,6 +83,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
     this.fetchImpl = options.fetchImpl || ((...args) => fetch(...args));
     this.legacyAttendeeIndex = options.legacyAttendeeIndex !== false;
     this.discoveryIndex = options.discoveryIndex || null;
+    this.explainDiscovery = options.explainDiscovery !== false;
     this.isLiveCluster = false;
     this.clusterInfo = null;
 
@@ -319,14 +322,29 @@ export class ElasticsearchClient extends IElasticsearchClient {
     const { body, retrievers, weights } = buildDiscoveryQuery({
       eventId, queryText, profileVector: queryVector, lookingForText, excludeIds, limit, embedModel: this.embedModel
     });
-    const res = await this.search(this.discoveryIndex, body);
+    const executed = this.explainDiscovery ? { ...body, explain: true } : body;
+    const res = await this.search(this.discoveryIndex, executed);
+    const explanations = new Map((res.raw?.hits?.hits || []).map((h) => [h._id, h._explanation]));
     return {
-      hits: res.hits.map((h) => ({
-        id: h.id, score: h.score, rrfScore: h.score, bm25Score: null, knnScore: null, bm25Rank: null, knnRank: null, source: h.source
-      })),
+      hits: res.hits.map((h) => {
+        const retrieverRanks = parseRetrieverRanks(explanations.get(h.id), retrievers);
+        return {
+          id: h.id,
+          score: h.score,
+          rrfScore: h.score,
+          bm25Score: null,
+          knnScore: null,
+          // Ranks of this candidate in each retriever before fusion (null = not returned by that retriever).
+          bm25Rank: retrieverRanks.bm25 ?? null,
+          knnRank: retrieverRanks.profile_knn ?? retrieverRanks.looking_for_knn ?? null,
+          retrieverRanks,
+          source: h.source
+        };
+      }),
       totalHits: res.total,
       tookMs: res.tookMs,
-      querySpec: { index: this.discoveryIndex, retrievers, weights, ...summarizeVectors(body) },
+      // The request exactly as executed (query vectors shortened for display).
+      querySpec: { index: this.discoveryIndex, retrievers, weights, ...summarizeVectors(executed) },
       engine: "elasticsearch"
     };
   }
