@@ -1,0 +1,585 @@
+{
+  "cinder-people": {
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "title": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "company": {
+          "type": "keyword"
+        },
+        "avatar": {
+          "type": "keyword",
+          "index": false
+        },
+        "bio": {
+          "type": "text"
+        },
+        "discipline": {
+          "type": "keyword"
+        },
+        "seniority": {
+          "type": "keyword"
+        },
+        "yearsExperience": {
+          "type": "integer"
+        },
+        "homeCity": {
+          "type": "keyword"
+        },
+        "homeCountry": {
+          "type": "keyword"
+        },
+        "interests": {
+          "type": "keyword"
+        },
+        "expertise": {
+          "type": "keyword"
+        },
+        "createdAt": {
+          "type": "date"
+        },
+        "synthetic": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "cinder-registrations": {
+    "settings": {
+      "index.default_pipeline": "cinder-embed-registration"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "eventId": {
+          "type": "keyword"
+        },
+        "personId": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "title": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "company": {
+          "type": "keyword"
+        },
+        "avatar": {
+          "type": "keyword",
+          "index": false
+        },
+        "bio": {
+          "type": "text"
+        },
+        "discipline": {
+          "type": "keyword"
+        },
+        "seniority": {
+          "type": "keyword"
+        },
+        "homeCity": {
+          "type": "keyword"
+        },
+        "interests": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "expertise": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "projects": {
+          "type": "text"
+        },
+        "challenges": {
+          "type": "text"
+        },
+        "looking_for": {
+          "type": "text"
+        },
+        "topics": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "role": {
+          "type": "keyword"
+        },
+        "booth": {
+          "type": "keyword"
+        },
+        "speakerSessionIds": {
+          "type": "keyword"
+        },
+        "bookmarkedSessionIds": {
+          "type": "keyword"
+        },
+        "openTo": {
+          "type": "keyword"
+        },
+        "registeredAt": {
+          "type": "date"
+        },
+        "checked_in_at": {
+          "type": "date"
+        },
+        "searchText": {
+          "type": "text"
+        },
+        "embedding": {
+          "type": "dense_vector",
+          "dims": 1024,
+          "index": true,
+          "similarity": "cosine"
+        },
+        "synthetic": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "cinder-sessions": {
+    "settings": {
+      "index.default_pipeline": "cinder-embed-session"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "eventId": {
+          "type": "keyword"
+        },
+        "sourceSubEventId": {
+          "type": "keyword"
+        },
+        "title": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "abstract": {
+          "type": "text"
+        },
+        "sessionType": {
+          "type": "keyword"
+        },
+        "track": {
+          "type": "keyword"
+        },
+        "level": {
+          "type": "keyword"
+        },
+        "tags": {
+          "type": "keyword"
+        },
+        "day": {
+          "type": "integer"
+        },
+        "startDate": {
+          "type": "date"
+        },
+        "endDate": {
+          "type": "date"
+        },
+        "originalStartDate": {
+          "type": "date"
+        },
+        "timezone": {
+          "type": "keyword"
+        },
+        "spaceId": {
+          "type": "keyword"
+        },
+        "roomName": {
+          "type": "keyword"
+        },
+        "previousSpaceId": {
+          "type": "keyword"
+        },
+        "speakerIds": {
+          "type": "keyword"
+        },
+        "speakerNames": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "capacity": {
+          "type": "integer"
+        },
+        "streamed": {
+          "type": "boolean"
+        },
+        "searchText": {
+          "type": "text"
+        },
+        "embedding": {
+          "type": "dense_vector",
+          "dims": 1024,
+          "index": true,
+          "similarity": "cosine"
+        },
+        "synthetic": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "cinder-spaces": {
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "venueId": {
+          "type": "keyword"
+        },
+        "venueName": {
+          "type": "keyword"
+        },
+        "eventId": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "aliases": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "kind": {
+          "type": "keyword"
+        },
+        "floor": {
+          "type": "keyword"
+        },
+        "capacity": {
+          "type": "integer"
+        },
+        "tags": {
+          "type": "keyword"
+        },
+        "meetupFriendly": {
+          "type": "boolean"
+        },
+        "synthetic": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "cinder-announcements": {
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "eventId": {
+          "type": "keyword"
+        },
+        "publishAt": {
+          "type": "date"
+        },
+        "kind": {
+          "type": "keyword"
+        },
+        "severity": {
+          "type": "keyword"
+        },
+        "audience": {
+          "type": "keyword"
+        },
+        "title": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "body": {
+          "type": "text"
+        },
+        "affects": {
+          "properties": {
+            "sessionIds": {
+              "type": "keyword"
+            },
+            "spaceIds": {
+              "type": "keyword"
+            }
+          }
+        },
+        "synthetic": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "cinder-prompts": {
+    "settings": {
+      "index.default_pipeline": "cinder-embed-prompt"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "phase": {
+          "type": "keyword"
+        },
+        "topics": {
+          "type": "keyword"
+        },
+        "text": {
+          "type": "text"
+        },
+        "searchText": {
+          "type": "text"
+        },
+        "embedding": {
+          "type": "dense_vector",
+          "dims": 1024,
+          "index": true,
+          "similarity": "cosine"
+        },
+        "synthetic": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "cinder-pods": {
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "eventId": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "topic": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "theme": {
+          "type": "text"
+        },
+        "memberIds": {
+          "type": "keyword"
+        },
+        "facilitatorName": {
+          "type": "keyword"
+        },
+        "status": {
+          "type": "keyword"
+        },
+        "centroid": {
+          "type": "dense_vector",
+          "dims": 1024,
+          "index": true,
+          "similarity": "cosine"
+        },
+        "pinnedMeetup": {
+          "properties": {
+            "spaceId": {
+              "type": "keyword"
+            },
+            "location": {
+              "type": "keyword"
+            },
+            "time": {
+              "type": "keyword"
+            },
+            "startsAt": {
+              "type": "date"
+            },
+            "confirmed": {
+              "type": "boolean"
+            },
+            "rsvps": {
+              "type": "keyword"
+            }
+          }
+        },
+        "pinnedAnnouncements": {
+          "type": "text"
+        },
+        "createdAt": {
+          "type": "date"
+        },
+        "updatedAt": {
+          "type": "date"
+        },
+        "compositionMeta": {
+          "type": "object",
+          "enabled": false
+        }
+      }
+    }
+  },
+  "cinder-interactions": {
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "eventId": {
+          "type": "keyword"
+        },
+        "initiatorId": {
+          "type": "keyword"
+        },
+        "targetId": {
+          "type": "keyword"
+        },
+        "action": {
+          "type": "keyword"
+        },
+        "mutual": {
+          "type": "boolean"
+        },
+        "explanation": {
+          "type": "text"
+        },
+        "scores": {
+          "properties": {
+            "rrf": {
+              "type": "float"
+            },
+            "bm25": {
+              "type": "float"
+            },
+            "knn": {
+              "type": "float"
+            }
+          }
+        },
+        "createdAt": {
+          "type": "date"
+        }
+      }
+    }
+  },
+  "cinder-messages": {
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "eventId": {
+          "type": "keyword"
+        },
+        "podId": {
+          "type": "keyword"
+        },
+        "senderId": {
+          "type": "keyword"
+        },
+        "senderName": {
+          "type": "keyword"
+        },
+        "senderType": {
+          "type": "keyword"
+        },
+        "content": {
+          "type": "text"
+        },
+        "timestamp": {
+          "type": "date"
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "metadata": {
+          "type": "flattened"
+        },
+        "channel": {
+          "type": "keyword"
+        },
+        "matchId": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}

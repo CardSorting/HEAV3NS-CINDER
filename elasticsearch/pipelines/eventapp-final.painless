@@ -1,0 +1,73 @@
+// eventapp-final: runs on EVERY doc written to eventapp (index.final_pipeline).
+// 1) Un-flattens slash keys ("location/0/address/addressLocality") into nested objects/arrays,
+//    as produced by Kibana's file uploader. No-op for docs that are already nested.
+// 2) Derives geoPoint from the first location that has geo.latitude/longitude.
+// 3) Defaults @timestamp to startDate.
+
+boolean isIndex(String p) {
+  if (p.length() == 0 || p.length() > 4) return false;
+  for (int i = 0; i < p.length(); i++) { int c = p.charAt(i); if (c < 48 || c > 57) return false; }
+  return true;
+}
+
+def child(def cur, String key, String nextKey) {
+  def fresh = isIndex(nextKey) ? new ArrayList() : new HashMap();
+  if (cur instanceof Map) {
+    if (cur.get(key) == null) cur.put(key, fresh);
+    return cur.get(key);
+  }
+  int i = Integer.parseInt(key);
+  while (cur.size() <= i) cur.add(null);
+  if (cur.get(i) == null) cur.set(i, fresh);
+  return cur.get(i);
+}
+
+void assign(def cur, String key, def val) {
+  if (cur instanceof Map) { cur.put(key, val); return; }
+  int i = Integer.parseInt(key);
+  while (cur.size() <= i) cur.add(null);
+  cur.set(i, val);
+}
+
+def compact(def v) {
+  if (v instanceof Map) { for (def k : new ArrayList(v.keySet())) v.put(k, compact(v.get(k))); return v; }
+  if (v instanceof List) { List out = new ArrayList(); for (def x : v) if (x != null) out.add(compact(x)); return out; }
+  return v;
+}
+
+// ---- 1) unflatten ----
+List flatKeys = new ArrayList();
+for (def k : ctx.keySet()) { if (!k.startsWith('_') && k.indexOf('/') > 0) flatKeys.add(k); }
+if (flatKeys.size() > 0) {
+  Set roots = new HashSet();
+  for (String k : flatKeys) {
+    def val = ctx.remove(k);
+    if (k.startsWith('fieldSources/')) {            // keys are JSON pointers: fieldSources//startDate
+      if (ctx.fieldSources == null) ctx.fieldSources = new HashMap();
+      ctx.fieldSources.put(k.substring(13), val);
+      continue;
+    }
+    String[] parts = k.splitOnToken('/');
+    roots.add(parts[0]);
+    def cur = ctx;
+    for (int i = 0; i < parts.length - 1; i++) cur = child(cur, parts[i], parts[i + 1]);
+    assign(cur, parts[parts.length - 1], val);
+  }
+  for (def r : roots) ctx.put(r, compact(ctx.get(r)));
+}
+
+// ---- 2) geoPoint ----
+def locs = ctx.location;
+if (locs instanceof Map) locs = [locs];
+if (locs instanceof List) {
+  for (def l : locs) {
+    if (l instanceof Map && l.geo instanceof Map && l.geo.latitude != null && l.geo.longitude != null) {
+      ctx.geoPoint = ['lat': Double.parseDouble(l.geo.latitude.toString()),
+                      'lon': Double.parseDouble(l.geo.longitude.toString())];
+      break;
+    }
+  }
+}
+
+// ---- 3) defaults ----
+if (ctx['@timestamp'] == null && ctx.startDate != null) ctx['@timestamp'] = ctx.startDate;

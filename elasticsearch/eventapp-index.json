@@ -1,0 +1,225 @@
+{
+  "settings": {
+    "index.final_pipeline": "eventapp-final"
+  },
+  "mappings": {
+    "dynamic": true,
+    "date_detection": false,
+    "numeric_detection": false,
+    "_meta": {
+      "description": "Unified event schema (schema.org/JSON-LD style). Nested objects, not slash-flattened keys.",
+      "version": 1
+    },
+    "properties": {
+      "@context": { "type": "keyword", "index": false },
+      "@id": { "type": "keyword" },
+      "@type": { "type": "keyword" },
+      "@timestamp": { "type": "date" },
+      "name": {
+        "type": "text",
+        "fields": {
+          "keyword": { "type": "keyword", "ignore_above": 256 },
+          "suggest": { "type": "search_as_you_type" }
+        }
+      },
+      "description": { "type": "text" },
+      "category": { "type": "keyword" },
+      "labels": { "type": "keyword" },
+      "url": { "type": "keyword" },
+      "eventStatus": { "type": "keyword" },
+      "eventAttendanceMode": { "type": "keyword" },
+      "startDate": { "type": "date" },
+      "endDate": { "type": "date" },
+      "doorTime": { "type": "date" },
+      "previousStartDate": { "type": "date" },
+      "predictedEnd": { "type": "date" },
+      "timezone": { "type": "keyword" },
+      "datePrecision": { "type": "keyword" },
+      "datesTentative": { "type": "boolean" },
+      "isAccessibleForFree": { "type": "boolean" },
+      "typicalAgeRange": { "type": "keyword" },
+      "inLanguage": { "type": "keyword" },
+      "maximumAttendeeCapacity": { "type": "integer" },
+      "remainingAttendeeCapacity": { "type": "integer" },
+      "codeOfConductUrl": { "type": "keyword" },
+      "expectedAttendance": {
+        "properties": {
+          "value": { "type": "integer" },
+          "basis": { "type": "keyword" },
+          "method": { "type": "keyword" },
+          "source": { "type": "keyword" },
+          "asOf": { "type": "date" }
+        }
+      },
+      "geoPoint": { "type": "geo_point" },
+      "location": {
+        "properties": {
+          "@id": { "type": "keyword" },
+          "@type": { "type": "keyword" },
+          "name": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+          "url": { "type": "keyword" },
+          "platform": { "type": "keyword" },
+          "accessType": { "type": "keyword" },
+          "maximumAttendeeCapacity": { "type": "integer" },
+          "address": {
+            "properties": {
+              "streetAddress": { "type": "keyword" },
+              "addressLocality": { "type": "keyword" },
+              "addressRegion": { "type": "keyword" },
+              "postalCode": { "type": "keyword" },
+              "addressCountry": { "type": "keyword" }
+            }
+          },
+          "geo": {
+            "properties": {
+              "latitude": { "type": "double" },
+              "longitude": { "type": "double" }
+            }
+          },
+          "marketArea": {
+            "properties": {
+              "system": { "type": "keyword" },
+              "code": { "type": "keyword" },
+              "name": { "type": "keyword" }
+            }
+          }
+        }
+      },
+      "performer": {
+        "type": "nested",
+        "properties": {
+          "@type": { "type": "keyword" },
+          "name": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+          "roleName": { "type": "keyword" },
+          "billingOrder": { "type": "integer" },
+          "startDate": { "type": "date" },
+          "endDate": { "type": "date" },
+          "performer": {
+            "properties": {
+              "@type": { "type": "keyword" },
+              "name": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+              "description": { "type": "text" }
+            }
+          }
+        }
+      },
+      "offers": {
+        "type": "nested",
+        "properties": {
+          "@type": { "type": "keyword" },
+          "name": { "type": "keyword" },
+          "category": { "type": "keyword" },
+          "price": { "type": "double" },
+          "lowPrice": { "type": "double" },
+          "highPrice": { "type": "double" },
+          "priceCurrency": { "type": "keyword" },
+          "availability": { "type": "keyword" },
+          "availabilityStarts": { "type": "date" },
+          "validThrough": { "type": "date" },
+          "eligibleQuantityMax": { "type": "integer" },
+          "url": { "type": "keyword" }
+        }
+      },
+      "organizer": {
+        "properties": {
+          "@type": { "type": "keyword" },
+          "name": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+          "url": { "type": "keyword" }
+        }
+      },
+      "sponsor": {
+        "properties": {
+          "@type": { "type": "keyword" },
+          "name": { "type": "keyword" }
+        }
+      },
+      "superEvent": {
+        "properties": {
+          "@id": { "type": "keyword" },
+          "@type": { "type": "keyword" },
+          "name": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+          "seriesType": { "type": "keyword" }
+        }
+      },
+      "subEvent": {
+        "type": "nested",
+        "properties": {
+          "@id": { "type": "keyword" },
+          "@type": { "type": "keyword" },
+          "name": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+          "abstract": { "type": "text" },
+          "startDate": { "type": "date" },
+          "endDate": { "type": "date" },
+          "duration": { "type": "keyword" },
+          "track": { "type": "keyword" },
+          "sessionType": { "type": "keyword" },
+          "location": { "properties": { "@type": { "type": "keyword" }, "name": { "type": "keyword" } } },
+          "performer": {
+            "properties": {
+              "@type": { "type": "keyword" },
+              "roleName": { "type": "keyword" },
+              "performer": {
+                "properties": {
+                  "@type": { "type": "keyword" },
+                  "name": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+                  "description": { "type": "text" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "hasParticipationOffer": {
+        "properties": {
+          "@type": { "type": "keyword" },
+          "callType": { "type": "keyword" },
+          "url": { "type": "keyword" },
+          "availabilityStarts": { "type": "date" },
+          "availabilityEnds": { "type": "date" },
+          "notificationDate": { "type": "date" },
+          "submissionTypes": { "type": "keyword" },
+          "speakerCompensation": { "type": "keyword" },
+          "travelSupport": { "type": "keyword" },
+          "ticketIncluded": { "type": "boolean" }
+        }
+      },
+      "additionalProperty": {
+        "properties": {
+          "name": { "type": "keyword" },
+          "value": { "type": "keyword" },
+          "source": { "type": "keyword" }
+        }
+      },
+      "identifier": {
+        "properties": {
+          "propertyID": { "type": "keyword" },
+          "value": { "type": "keyword" }
+        }
+      },
+      "sources": {
+        "type": "nested",
+        "properties": {
+          "source": { "type": "keyword" },
+          "sourceId": { "type": "keyword" },
+          "url": { "type": "keyword" },
+          "confidence": { "type": "float" },
+          "license": { "type": "keyword" },
+          "retrievedAt": { "type": "date" }
+        }
+      },
+      "sourceClassifications": {
+        "properties": {
+          "source": { "type": "keyword" },
+          "path": { "type": "keyword" },
+          "ids": { "type": "keyword" }
+        }
+      },
+      "fieldSources": { "type": "flattened" },
+      "firstSeen": { "type": "date" },
+      "lastUpdated": { "type": "date" },
+      "synthetic": { "type": "boolean" },
+      "ingestedAt": { "type": "date" },
+      "ingestError": { "type": "keyword" }
+    }
+  }
+}

@@ -1,0 +1,178 @@
+{
+  "now": "2026-11-09T00:00:00Z",
+  "dmaCodes": { "Chicago": "602", "Austin": "635", "Nashville": "659", "Denver": "751", "Salt Lake City": "770", "Seattle-Tacoma": "819" },
+  "countries": {
+    "US": { "currency": "USD", "fx": 1.0, "langs": [["en"]] },
+    "LU": { "currency": "EUR", "fx": 0.92, "langs": [["fr"], ["fr", "en"], ["de", "fr", "en"], ["en"]] },
+    "DE": { "currency": "EUR", "fx": 0.92, "langs": [["de"], ["de", "en"], ["en"]] },
+    "GB": { "currency": "GBP", "fx": 0.79, "langs": [["en"]] },
+    "JP": { "currency": "JPY", "fx": 150.0, "langs": [["ja"], ["ja", "en"]] }
+  },
+  "venues": [
+    { "id": "delta-center", "name": "Delta Center", "type": "StadiumOrArena", "style": "arena", "street": "301 S Temple", "city": "Salt Lake City", "region": "UT", "postal": "84101", "country": "US", "lat": 40.7683, "lon": -111.9011, "tz": "America/Denver", "dma": "Salt Lake City", "cap": 18306, "cats": ["concert", "sports", "comedy"], "home": ["basketball", "hockey"] },
+    { "id": "salt-palace", "name": "Salt Palace Convention Center", "type": "ConventionCenter", "style": "hall", "street": "100 S West Temple", "city": "Salt Lake City", "region": "UT", "postal": "84101", "country": "US", "lat": 40.7676, "lon": -111.8947, "tz": "America/Denver", "dma": "Salt Lake City", "cap": 6000, "cats": ["conference", "expo", "academic"] },
+    { "id": "the-depot", "name": "The Depot", "type": "MusicVenue", "style": "club", "street": "13 N 400 W", "city": "Salt Lake City", "region": "UT", "postal": "84101", "country": "US", "lat": 40.7701, "lon": -111.9033, "tz": "America/Denver", "dma": "Salt Lake City", "cap": 1200, "cats": ["concert", "comedy"] },
+    { "id": "eccles-theater", "name": "Eccles Theater", "type": "PerformingArtsTheater", "style": "theater", "street": "131 S Main St", "city": "Salt Lake City", "region": "UT", "postal": "84111", "country": "US", "lat": 40.7671, "lon": -111.8910, "tz": "America/Denver", "dma": "Salt Lake City", "cap": 2468, "cats": ["concert", "comedy", "screening"] },
+    { "id": "abravanel-hall", "name": "Abravanel Hall", "type": "PerformingArtsTheater", "style": "theater", "street": "123 W South Temple", "city": "Salt Lake City", "region": "UT", "postal": "84101", "country": "US", "lat": 40.7694, "lon": -111.8937, "tz": "America/Denver", "dma": "Salt Lake City", "cap": 2811, "cats": ["concert"] },
+    { "id": "slc-main-library", "name": "Salt Lake City Public Library – Main Library", "type": "Library", "style": "room", "street": "210 E 400 S", "city": "Salt Lake City", "region": "UT", "postal": "84111", "country": "US", "lat": 40.7606, "lon": -111.8845, "tz": "America/Denver", "dma": "Salt Lake City", "cap": 300, "cats": ["meetup", "community", "screening"] },
+    { "id": "liberty-park", "name": "Liberty Park", "type": "Park", "style": "park", "street": "600 E 900 S", "city": "Salt Lake City", "region": "UT", "postal": "84105", "country": "US", "lat": 40.7458, "lon": -111.8746, "tz": "America/Denver", "dma": "Salt Lake City", "cap": 20000, "cats": ["festival", "community"] },
+    { "id": "uv-convention-center", "name": "Utah Valley Convention Center", "type": "ConventionCenter", "style": "hall", "street": "220 W Center St", "city": "Provo", "region": "UT", "postal": "84601", "country": "US", "lat": 40.2339, "lon": -111.6628, "tz": "America/Denver", "dma": "Salt Lake City", "cap": 2500, "cats": ["conference", "expo", "meetup"] },
+
+    { "id": "red-rocks", "name": "Red Rocks Amphitheatre", "type": "MusicVenue", "style": "amphitheater", "street": "18300 W Alameda Pkwy", "city": "Morrison", "region": "CO", "postal": "80465", "country": "US", "lat": 39.6654, "lon": -105.2057, "tz": "America/Denver", "dma": "Denver", "cap": 9525, "cats": ["concert", "screening"] },
+    { "id": "ball-arena", "name": "Ball Arena", "type": "StadiumOrArena", "style": "arena", "street": "1000 Chopper Cir", "city": "Denver", "region": "CO", "postal": "80204", "country": "US", "lat": 39.7487, "lon": -105.0077, "tz": "America/Denver", "dma": "Denver", "cap": 19520, "cats": ["concert", "sports", "comedy"], "home": ["basketball", "hockey"] },
+    { "id": "colorado-convention-center", "name": "Colorado Convention Center", "type": "ConventionCenter", "style": "hall", "street": "700 14th St", "city": "Denver", "region": "CO", "postal": "80202", "country": "US", "lat": 39.7428, "lon": -104.9966, "tz": "America/Denver", "dma": "Denver", "cap": 8000, "cats": ["conference", "expo", "academic"] },
+    { "id": "mission-ballroom", "name": "Mission Ballroom", "type": "MusicVenue", "style": "club", "street": "4242 Wynkoop St", "city": "Denver", "region": "CO", "postal": "80216", "country": "US", "lat": 39.7766, "lon": -104.9727, "tz": "America/Denver", "dma": "Denver", "cap": 3950, "cats": ["concert", "comedy"] },
+    { "id": "ellie-caulkins", "name": "Ellie Caulkins Opera House", "type": "PerformingArtsTheater", "style": "theater", "street": "1385 Curtis St", "city": "Denver", "region": "CO", "postal": "80204", "country": "US", "lat": 39.7451, "lon": -104.9988, "tz": "America/Denver", "dma": "Denver", "cap": 2225, "cats": ["concert", "comedy"] },
+    { "id": "denver-central-library", "name": "Denver Central Library", "type": "Library", "style": "room", "street": "10 W 14th Ave Pkwy", "city": "Denver", "region": "CO", "postal": "80204", "country": "US", "lat": 39.7373, "lon": -104.9878, "tz": "America/Denver", "dma": "Denver", "cap": 250, "cats": ["meetup", "community", "screening"] },
+    { "id": "civic-center-park", "name": "Civic Center Park", "type": "Park", "style": "park", "street": "101 W 14th Ave", "city": "Denver", "region": "CO", "postal": "80204", "country": "US", "lat": 39.7378, "lon": -104.9879, "tz": "America/Denver", "dma": "Denver", "cap": 25000, "cats": ["festival", "community"] },
+
+    { "id": "climate-pledge-arena", "name": "Climate Pledge Arena", "type": "StadiumOrArena", "style": "arena", "street": "334 1st Ave N", "city": "Seattle", "region": "WA", "postal": "98109", "country": "US", "lat": 47.6221, "lon": -122.3540, "tz": "America/Los_Angeles", "dma": "Seattle-Tacoma", "cap": 17100, "cats": ["concert", "sports", "comedy"], "home": ["basketball", "hockey"] },
+    { "id": "seattle-convention-center", "name": "Seattle Convention Center – Arch", "type": "ConventionCenter", "style": "hall", "street": "705 Pike St", "city": "Seattle", "region": "WA", "postal": "98101", "country": "US", "lat": 47.6118, "lon": -122.3318, "tz": "America/Los_Angeles", "dma": "Seattle-Tacoma", "cap": 7000, "cats": ["conference", "expo", "academic"] },
+    { "id": "the-showbox", "name": "The Showbox", "type": "MusicVenue", "style": "club", "street": "1426 1st Ave", "city": "Seattle", "region": "WA", "postal": "98101", "country": "US", "lat": 47.6087, "lon": -122.3401, "tz": "America/Los_Angeles", "dma": "Seattle-Tacoma", "cap": 1150, "cats": ["concert", "comedy"] },
+    { "id": "benaroya-hall", "name": "Benaroya Hall", "type": "PerformingArtsTheater", "style": "theater", "street": "200 University St", "city": "Seattle", "region": "WA", "postal": "98101", "country": "US", "lat": 47.6080, "lon": -122.3369, "tz": "America/Los_Angeles", "dma": "Seattle-Tacoma", "cap": 2500, "cats": ["concert"] },
+    { "id": "seattle-central-library", "name": "Seattle Central Library", "type": "Library", "style": "room", "street": "1000 4th Ave", "city": "Seattle", "region": "WA", "postal": "98104", "country": "US", "lat": 47.6067, "lon": -122.3325, "tz": "America/Los_Angeles", "dma": "Seattle-Tacoma", "cap": 275, "cats": ["meetup", "community", "screening"] },
+    { "id": "seattle-center", "name": "Seattle Center", "type": "Place", "style": "park", "street": "305 Harrison St", "city": "Seattle", "region": "WA", "postal": "98109", "country": "US", "lat": 47.6215, "lon": -122.3509, "tz": "America/Los_Angeles", "dma": "Seattle-Tacoma", "cap": 30000, "cats": ["festival", "community"] },
+
+    { "id": "moody-center", "name": "Moody Center", "type": "StadiumOrArena", "style": "arena", "street": "2001 Robert Dedman Dr", "city": "Austin", "region": "TX", "postal": "78712", "country": "US", "lat": 30.2817, "lon": -97.7322, "tz": "America/Chicago", "dma": "Austin", "cap": 15000, "cats": ["concert", "sports", "comedy"], "home": ["basketball", "hockey"] },
+    { "id": "austin-convention-center", "name": "Austin Convention Center", "type": "ConventionCenter", "style": "hall", "street": "500 E Cesar Chavez St", "city": "Austin", "region": "TX", "postal": "78701", "country": "US", "lat": 30.2636, "lon": -97.7396, "tz": "America/Chicago", "dma": "Austin", "cap": 8000, "cats": ["conference", "expo", "academic"] },
+    { "id": "stubbs", "name": "Stubb's Waller Creek Amphitheater", "type": "MusicVenue", "style": "amphitheater", "street": "801 Red River St", "city": "Austin", "region": "TX", "postal": "78701", "country": "US", "lat": 30.2685, "lon": -97.7362, "tz": "America/Chicago", "dma": "Austin", "cap": 2200, "cats": ["concert"] },
+    { "id": "paramount-austin", "name": "Paramount Theatre", "type": "PerformingArtsTheater", "style": "theater", "street": "713 Congress Ave", "city": "Austin", "region": "TX", "postal": "78701", "country": "US", "lat": 30.2692, "lon": -97.7425, "tz": "America/Chicago", "dma": "Austin", "cap": 1270, "cats": ["concert", "comedy", "screening"] },
+    { "id": "austin-central-library", "name": "Austin Central Library", "type": "Library", "style": "room", "street": "710 W Cesar Chavez St", "city": "Austin", "region": "TX", "postal": "78701", "country": "US", "lat": 30.2654, "lon": -97.7519, "tz": "America/Chicago", "dma": "Austin", "cap": 300, "cats": ["meetup", "community", "screening"] },
+    { "id": "zilker-park", "name": "Zilker Metropolitan Park", "type": "Park", "style": "park", "street": "2100 Barton Springs Rd", "city": "Austin", "region": "TX", "postal": "78746", "country": "US", "lat": 30.2670, "lon": -97.7729, "tz": "America/Chicago", "dma": "Austin", "cap": 75000, "cats": ["festival", "community"] },
+
+    { "id": "ryman-auditorium", "name": "Ryman Auditorium", "type": "MusicVenue", "style": "theater", "street": "116 Rep. John Lewis Way N", "city": "Nashville", "region": "TN", "postal": "37219", "country": "US", "lat": 36.1612, "lon": -86.7785, "tz": "America/Chicago", "dma": "Nashville", "cap": 2362, "cats": ["concert", "comedy"] },
+    { "id": "music-city-center", "name": "Music City Center", "type": "ConventionCenter", "style": "hall", "street": "201 Rep. John Lewis Way S", "city": "Nashville", "region": "TN", "postal": "37203", "country": "US", "lat": 36.1575, "lon": -86.7765, "tz": "America/Chicago", "dma": "Nashville", "cap": 6000, "cats": ["conference", "expo", "academic"] },
+    { "id": "bridgestone-arena", "name": "Bridgestone Arena", "type": "StadiumOrArena", "style": "arena", "street": "501 Broadway", "city": "Nashville", "region": "TN", "postal": "37203", "country": "US", "lat": 36.1592, "lon": -86.7785, "tz": "America/Chicago", "dma": "Nashville", "cap": 19000, "cats": ["concert", "sports", "comedy"], "home": ["basketball", "hockey"] },
+
+    { "id": "mccormick-place", "name": "McCormick Place", "type": "ConventionCenter", "style": "hall", "street": "2301 S Lake Shore Dr", "city": "Chicago", "region": "IL", "postal": "60616", "country": "US", "lat": 41.8516, "lon": -87.6157, "tz": "America/Chicago", "dma": "Chicago", "cap": 12000, "cats": ["conference", "expo", "academic"] },
+    { "id": "united-center", "name": "United Center", "type": "StadiumOrArena", "style": "arena", "street": "1901 W Madison St", "city": "Chicago", "region": "IL", "postal": "60612", "country": "US", "lat": 41.8807, "lon": -87.6742, "tz": "America/Chicago", "dma": "Chicago", "cap": 20917, "cats": ["concert", "sports", "comedy"], "home": ["basketball", "hockey"] },
+    { "id": "metro-chicago", "name": "Metro", "type": "MusicVenue", "style": "club", "street": "3730 N Clark St", "city": "Chicago", "region": "IL", "postal": "60613", "country": "US", "lat": 41.9497, "lon": -87.6588, "tz": "America/Chicago", "dma": "Chicago", "cap": 1100, "cats": ["concert", "comedy"] },
+    { "id": "harold-washington-library", "name": "Harold Washington Library Center", "type": "Library", "style": "room", "street": "400 S State St", "city": "Chicago", "region": "IL", "postal": "60605", "country": "US", "lat": 41.8763, "lon": -87.6281, "tz": "America/Chicago", "dma": "Chicago", "cap": 385, "cats": ["meetup", "community", "screening"] },
+    { "id": "grant-park", "name": "Grant Park", "type": "Park", "style": "park", "street": "337 E Randolph St", "city": "Chicago", "region": "IL", "postal": "60601", "country": "US", "lat": 41.8758, "lon": -87.6189, "tz": "America/Chicago", "dma": "Chicago", "cap": 100000, "cats": ["festival", "community"] },
+
+    { "id": "eccl", "name": "European Convention Center Luxembourg", "type": "ConventionCenter", "style": "hall", "street": "4 Place de l'Europe", "city": "Luxembourg", "region": null, "postal": "L-1499", "country": "LU", "lat": 49.6189, "lon": 6.1395, "tz": "Europe/Luxembourg", "dma": null, "cap": 3000, "cats": ["conference", "academic", "meetup"] },
+    { "id": "rockhal", "name": "Rockhal", "type": "MusicVenue", "style": "club", "street": "5 Avenue du Rock'n'Roll", "city": "Esch-sur-Alzette", "region": null, "postal": "L-4361", "country": "LU", "lat": 49.5011, "lon": 5.9469, "tz": "Europe/Luxembourg", "dma": null, "cap": 6500, "cats": ["concert", "comedy"] },
+    { "id": "philharmonie-luxembourg", "name": "Philharmonie Luxembourg", "type": "PerformingArtsTheater", "style": "theater", "street": "1 Place de l'Europe", "city": "Luxembourg", "region": null, "postal": "L-1499", "country": "LU", "lat": 49.6187, "lon": 6.1409, "tz": "Europe/Luxembourg", "dma": null, "cap": 1500, "cats": ["concert"] },
+    { "id": "luxexpo", "name": "Luxexpo The Box", "type": "ConventionCenter", "style": "hall", "street": "10 Circuit de la Foire Internationale", "city": "Luxembourg", "region": null, "postal": "L-1347", "country": "LU", "lat": 49.6343, "lon": 6.1692, "tz": "Europe/Luxembourg", "dma": null, "cap": 10000, "cats": ["expo", "conference"] },
+    { "id": "neimenster", "name": "Neimënster", "type": "CivicStructure", "style": "room", "street": "28 Rue Münster", "city": "Luxembourg", "region": null, "postal": "L-2160", "country": "LU", "lat": 49.6098, "lon": 6.1366, "tz": "Europe/Luxembourg", "dma": null, "cap": 400, "cats": ["meetup", "community", "screening"] },
+
+    { "id": "elbphilharmonie", "name": "Elbphilharmonie", "type": "PerformingArtsTheater", "style": "theater", "street": "Platz der Deutschen Einheit 1", "city": "Hamburg", "region": "HH", "postal": "20457", "country": "DE", "lat": 53.5413, "lon": 9.9841, "tz": "Europe/Berlin", "dma": null, "cap": 2100, "cats": ["concert"] },
+    { "id": "hamburg-messe", "name": "Hamburg Messe und Congress", "type": "ConventionCenter", "style": "hall", "street": "Messeplatz 1", "city": "Hamburg", "region": "HH", "postal": "20357", "country": "DE", "lat": 53.5636, "lon": 9.9786, "tz": "Europe/Berlin", "dma": null, "cap": 10000, "cats": ["conference", "expo", "academic"] },
+    { "id": "barclays-arena", "name": "Barclays Arena", "type": "StadiumOrArena", "style": "arena", "street": "Sylvesterallee 10", "city": "Hamburg", "region": "HH", "postal": "22525", "country": "DE", "lat": 53.5893, "lon": 9.8988, "tz": "Europe/Berlin", "dma": null, "cap": 16000, "cats": ["concert", "sports", "comedy"], "home": ["handball"] },
+    { "id": "uebel-gefaehrlich", "name": "Uebel & Gefährlich", "type": "MusicVenue", "style": "club", "street": "Feldstraße 66", "city": "Hamburg", "region": "HH", "postal": "20359", "country": "DE", "lat": 53.5560, "lon": 9.9696, "tz": "Europe/Berlin", "dma": null, "cap": 1000, "cats": ["concert", "meetup"] },
+
+    { "id": "roundhouse", "name": "Roundhouse", "type": "MusicVenue", "style": "club", "street": "Chalk Farm Rd", "city": "London", "region": null, "postal": "NW1 8EH", "country": "GB", "lat": 51.5432, "lon": -0.1519, "tz": "Europe/London", "dma": null, "cap": 3300, "cats": ["concert", "comedy"] },
+    { "id": "excel-london", "name": "ExCeL London", "type": "ConventionCenter", "style": "hall", "street": "1 Western Gateway", "city": "London", "region": null, "postal": "E16 1XL", "country": "GB", "lat": 51.5085, "lon": 0.0295, "tz": "Europe/London", "dma": null, "cap": 15000, "cats": ["conference", "expo", "academic"] },
+    { "id": "barbican", "name": "Barbican Centre", "type": "PerformingArtsTheater", "style": "theater", "street": "Silk St", "city": "London", "region": null, "postal": "EC2Y 8DS", "country": "GB", "lat": 51.5202, "lon": -0.0938, "tz": "Europe/London", "dma": null, "cap": 1943, "cats": ["concert", "screening", "meetup"] },
+
+    { "id": "tokyo-big-sight", "name": "Tokyo Big Sight", "type": "ConventionCenter", "style": "hall", "street": "3-11-1 Ariake, Koto City", "city": "Tokyo", "region": "Tokyo", "postal": "135-0063", "country": "JP", "lat": 35.6298, "lon": 139.7942, "tz": "Asia/Tokyo", "dma": null, "cap": 20000, "cats": ["conference", "expo", "academic"] },
+    { "id": "suntory-hall", "name": "Suntory Hall", "type": "PerformingArtsTheater", "style": "theater", "street": "1-13-1 Akasaka, Minato City", "city": "Tokyo", "region": "Tokyo", "postal": "107-8403", "country": "JP", "lat": 35.6672, "lon": 139.7404, "tz": "Asia/Tokyo", "dma": null, "cap": 2006, "cats": ["concert"] },
+    { "id": "nippon-budokan", "name": "Nippon Budokan", "type": "StadiumOrArena", "style": "arena", "street": "2-3 Kitanomarukoen, Chiyoda City", "city": "Tokyo", "region": "Tokyo", "postal": "102-8321", "country": "JP", "lat": 35.6933, "lon": 139.7499, "tz": "Asia/Tokyo", "dma": null, "cap": 14471, "cats": ["concert"] }
+  ],
+
+  "genres": {
+    "indie-rock": { "tm": ["Music", "Rock", "Indie Rock"], "styles": ["club", "arena", "amphitheater"], "artists": ["Echo Canyon", "Coastal Gulls", "Valley Peaks", "The Paper Lanterns", "Glass Harbor", "Static Orchard", "Low Tide Radio", "Marigold Riot"] },
+    "indie": { "tm": ["Music", "Alternative", "Indie Pop"], "styles": ["club", "amphitheater", "theater"], "artists": ["Juniper & the Hollows", "Pale Sundays", "Velvet Almanac", "Northern Arcade", "The Quiet Kites", "Honey Static"] },
+    "jazz": { "tm": ["Music", "Jazz", "Jazz"], "styles": ["theater", "club"], "artists": ["Salt Flats Quartet", "Rosa Delgado Trio", "Blue Mesa Ensemble", "The Midnight Standard", "Kenji Arakawa Quintet"] },
+    "classical": { "tm": ["Music", "Classical", "Symphonic"], "styles": ["theater"], "artists": ["Wasatch Chamber Orchestra", "Sakura Philharmonic", "Rhine Valley String Quartet", "Lumen Baroque Ensemble", "Northbridge Symphony"] },
+    "country": { "tm": ["Music", "Country", "Country"], "styles": ["theater", "arena", "amphitheater", "club"], "artists": ["Copper Creek Revival", "Dakota Lane", "The Prairie Lights", "Hollis Wade", "Sadie Bell & the Ramblers"] },
+    "electronic": { "tm": ["Music", "Dance/Electronic", "Electronic"], "styles": ["club", "arena", "amphitheater"], "artists": ["Neon Mesa", "Polar Drift", "Kilowatt Garden", "Sora Tanaka", "Midnight Transit"] },
+    "singer-songwriter": { "tm": ["Music", "Folk", "Singer-Songwriter"], "styles": ["theater", "club"], "artists": ["Sam Ortiz", "Camille Petit", "Ada Whitlock", "Theo Marlowe", "Lena Voss"] }
+  },
+  "soloArtists": ["Sora Tanaka", "Sam Ortiz", "Camille Petit", "Ada Whitlock", "Theo Marlowe", "Lena Voss", "Hollis Wade", "Dakota Lane"],
+  "tourNames": ["Long Way Home", "Afterglow", "Northern Lights", "Paper Moons", "Wildfire", "Echoes", "Golden Hour", "Ghost Coast", "Blue Hour", "Open Road", "Low Light", "Satellite Hearts"],
+  "classicalPrograms": ["Beethoven's Seventh", "Mahler 5", "Vivaldi: The Four Seasons", "Brahms & Schumann", "An Evening of Mozart", "New Year Concert", "Dvořák: New World Symphony", "Rachmaninoff Piano Concerto No. 2", "Bach: The Goldberg Variations"],
+  "jazzPrograms": ["Late Night Standards", "A Tribute to Coltrane", "Bossa Nova Nights", "Big Band Holiday", "New Originals Release Show"],
+
+  "festivals": [
+    { "name": "Desert Bloom Festival", "venue": "liberty-park", "genres": ["indie", "indie-rock", "electronic"] },
+    { "name": "Wasatch Folk & Roots Festival", "venue": "liberty-park", "genres": ["country", "singer-songwriter"] },
+    { "name": "Front Range Sound Festival", "venue": "civic-center-park", "genres": ["indie-rock", "indie"] },
+    { "name": "Mile High Jazz Weekend", "venue": "civic-center-park", "genres": ["jazz"] },
+    { "name": "Pacific Static Festival", "venue": "seattle-center", "genres": ["electronic", "indie"] },
+    { "name": "Emerald Sound Fest", "venue": "seattle-center", "genres": ["indie-rock", "singer-songwriter"] },
+    { "name": "Barton Springs Music Fest", "venue": "zilker-park", "genres": ["country", "indie-rock", "singer-songwriter"] },
+    { "name": "Lakefront Sound Festival", "venue": "grant-park", "genres": ["indie-rock", "electronic", "indie"] },
+    { "name": "Lakeshore Jazz Festival", "venue": "grant-park", "genres": ["jazz"] },
+    { "name": "Salt City Electronic Weekend", "venue": "liberty-park", "genres": ["electronic"] },
+    { "name": "Rocky Mountain Country Days", "venue": "civic-center-park", "genres": ["country"] },
+    { "name": "Colfax Indie Weekender", "venue": "civic-center-park", "genres": ["indie", "indie-rock"] },
+    { "name": "Puget Sound Folk Gathering", "venue": "seattle-center", "genres": ["singer-songwriter", "country"] },
+    { "name": "Harborfront Jazz Festival", "venue": "seattle-center", "genres": ["jazz"] },
+    { "name": "Hill Country Jazz & Blues", "venue": "zilker-park", "genres": ["jazz"] },
+    { "name": "Lady Bird Electronic Festival", "venue": "zilker-park", "genres": ["electronic"] },
+    { "name": "Windy City Indie Fest", "venue": "grant-park", "genres": ["indie", "indie-rock"] },
+    { "name": "Heartland Country Weekend", "venue": "grant-park", "genres": ["country"] }
+  ],
+
+  "teams": {
+    "basketball": { "tm": ["Sports", "Basketball", "Basketball"], "byVenue": { "delta-center": "Salt Lake Summit", "ball-arena": "Denver Altitude", "climate-pledge-arena": "Seattle Sound", "moody-center": "Austin Torches", "bridgestone-arena": "Nashville Rhythm", "united-center": "Chicago Lakeshore" } },
+    "hockey": { "tm": ["Sports", "Hockey", "Hockey"], "byVenue": { "delta-center": "Salt Lake Rime", "ball-arena": "Denver Ridgeline", "climate-pledge-arena": "Seattle Tidewater", "moody-center": "Austin Armadillos", "bridgestone-arena": "Nashville Fiddlers", "united-center": "Chicago Northshore" } },
+    "handball": { "tm": ["Sports", "Handball", "Handball"], "byVenue": { "barclays-arena": "Hamburg Hafenlöwen" }, "away": ["Kiel Küstenwölfe", "Berlin Spreeadler", "Flensburg Fördefalken", "Magdeburg Elbbären", "Leipzig Messestädter"] }
+  },
+
+  "comedians": ["Maya Okafor", "Dev Raman", "Jules Brennan", "Tommy Kowalski", "Priya Sandoval", "Marcus Bell", "Hana Mori", "Greta Lindqvist"],
+  "comedySpecials": ["Overthinking It", "Unfiltered", "Small Talk", "Late Bloomer", "Group Chat", "Out of Office", "Reply All", "Mostly Fine"],
+
+  "films": ["The Lantern Keeper", "Salt & Sky", "Northern Line", "The Last Ferry", "Paper Cities", "High Desert", "Signal Lost", "A Quiet Harvest", "Glass Mountains", "The Long Winter Road"],
+  "screeningFormats": ["{film} — Screening + Director Q&A", "{film} (35mm)", "Documentary Night: {film}", "{film} — Outdoor Screening", "{film} — Premiere", "Film Club: {film}"],
+
+  "topics": {
+    "data-engineering": { "label": "Data Engineering", "brands": ["Data Pipelines Summit", "DataOps Days", "Streaming Data Conf"],
+      "talks": ["Exactly-Once Is a Lie: Idempotent Pipelines in Practice", "Migrating 4,000 Airflow DAGs Without Downtime", "Schema Evolution at Scale", "Data Contracts That Engineers Actually Follow", "Streaming Joins Without Tears", "Cost-Aware Lakehouse Design"] },
+    "cloud": { "label": "Cloud Infrastructure", "brands": ["Cloud Infra Summit", "ServerlessDays", "CloudOps World"],
+      "talks": ["Multi-Region Without the Mystery", "Kubernetes Autoscaling Beyond CPU", "FinOps for Engineers", "Designing for Zonal Failure", "Serverless Cold Starts, Measured", "Terraform at 500 Modules"] },
+    "devops": { "label": "DevOps", "brands": ["DevSummit", "SRE Unplugged", "Platform Engineering Day"],
+      "talks": ["Incident Reviews That Change Things", "Platform Teams as Product Teams", "SLOs for the Rest of Us", "Shipping 300 Deploys a Day", "GitOps in Regulated Environments", "On-Call Without Burnout"] },
+    "javascript": { "label": "JavaScript", "brands": ["JSWest", "Frontend Forward", "Script Summit"],
+      "talks": ["Signals, Explained", "Shipping Less JavaScript", "TypeScript Types at the Edges", "Server Components in Production", "Accessibility Testing in CI", "Bundle Budgets That Stick"] },
+    "machine-learning": { "label": "Machine Learning", "brands": ["Applied ML Summit", "ModelOps Forum", "Practical AI Conference"],
+      "talks": ["Evaluating LLM Features Before Launch", "Feature Stores: When Not To", "Retrieval Pipelines That Don't Rot", "Monitoring Drift in Production Models", "Small Models, Big Wins", "Labeling Strategy on a Budget"] },
+    "security": { "label": "Security", "brands": ["Secure Pipelines Conf", "AppSec Frontier", "ZeroTrust Summit"],
+      "talks": ["Threat Modelling Event Pipelines", "Supply Chain Security for Small Teams", "Secrets Management Done Right", "Detection Engineering 101", "Zero Trust for Internal APIs", "Fuzzing Your Parsers"] },
+    "privacy": { "label": "Privacy", "brands": ["Privacy Engineering Forum", "Data Protection Summit"],
+      "talks": ["Differential Privacy in Analytics", "Data Minimisation by Design", "Consent Signals Across Systems", "Deletion Requests at Scale", "Privacy Reviews That Scale"] },
+    "analytics": { "label": "Analytics", "brands": ["Analytics Engineering Conf", "Metrics & Insights Summit"],
+      "talks": ["Metrics Layers in Practice", "Experimentation Pitfalls", "dbt Projects at 1,000 Models", "Dashboards Nobody Reads", "Attribution Without Cookies"] },
+    "ethics": { "label": "AI Ethics", "brands": ["Responsible AI Forum"],
+      "talks": ["Auditing Models for Fairness", "Documentation as Accountability", "Red-Teaming Civic AI", "Who Decides? Governance for ML"] }
+  },
+  "conferenceTopics": ["data-engineering", "cloud", "devops", "javascript", "machine-learning", "security", "privacy", "analytics"],
+  "meetupTopics": ["javascript", "devops", "machine-learning", "cloud", "data-engineering", "security"],
+  "academicConfs": [
+    { "acr": "SRML", "full": "Symposium on Reliable Machine Learning", "topic": "machine-learning" },
+    { "acr": "ICDEP", "full": "International Conference on Data Engineering Practice", "topic": "data-engineering" },
+    { "acr": "SPED", "full": "Symposium on Privacy-Enhancing Data Systems", "topic": "privacy" },
+    { "acr": "CEAI", "full": "Conference on Ethics in Applied AI", "topic": "ethics" },
+    { "acr": "WSRS", "full": "Workshop on Secure and Resilient Systems", "topic": "security" }
+  ],
+  "expos": [
+    { "name": "Industrie Nord Expo", "labels": ["manufacturing", "b2b"], "countries": ["DE", "LU"] },
+    { "name": "Mountain West Manufacturing Expo", "labels": ["manufacturing", "b2b"], "countries": ["US"] },
+    { "name": "B2B Commerce Expo", "labels": ["b2b"], "countries": ["US", "GB"] },
+    { "name": "Cloud & Data Center Expo", "labels": ["cloud", "b2b"], "countries": ["US", "GB", "DE", "JP"] },
+    { "name": "Smart Factory Expo", "labels": ["manufacturing"], "countries": ["JP", "DE", "US"] },
+    { "name": "SaaS Growth Expo", "labels": ["b2b", "analytics"], "countries": ["US", "GB"] }
+  ],
+  "community": [
+    { "title": "{city} Farmers Market", "labels": ["community", "family-friendly", "outdoors"], "styles": ["park"], "times": ["08:00", "09:00"], "mins": 300 },
+    { "title": "Community Garden Workday", "labels": ["community", "volunteering", "outdoors"], "styles": ["park"], "times": ["09:00", "10:00"], "mins": 180 },
+    { "title": "Neighborhood Cleanup at {venue}", "labels": ["community", "volunteering", "outdoors"], "styles": ["park"], "times": ["09:00"], "mins": 180 },
+    { "title": "Repair Café", "labels": ["community", "sustainability"], "styles": ["room"], "times": ["10:00", "13:00"], "mins": 180 },
+    { "title": "Family Board Game Night", "labels": ["community", "family-friendly"], "styles": ["room"], "times": ["18:00"], "mins": 150 },
+    { "title": "Open Mic Night", "labels": ["community", "music"], "styles": ["room"], "times": ["19:00"], "mins": 150 },
+    { "title": "{city} Volunteer Fair", "labels": ["community", "volunteering"], "styles": ["room", "park"], "times": ["11:00"], "mins": 240 },
+    { "title": "Book Swap & Coffee", "labels": ["community", "books"], "styles": ["room"], "times": ["10:00"], "mins": 120 }
+  ],
+
+  "firstNames": ["Helena", "Camille", "Rosa", "Sam", "Aisha", "Kenji", "Priya", "Mateo", "Ingrid", "Tomás", "Wei", "Fatima", "Lukas", "Nia", "Oskar", "Yuki", "Daniel", "Amara", "Felix", "Leila", "Arjun", "Sofia", "Jonas", "Mei", "Carlos", "Hannah", "Kwame", "Elena", "Ravi", "Zoe"],
+  "lastNames": ["Kraus", "Petit", "Delgado", "Ortiz", "Okafor", "Tanaka", "Raman", "Fernández", "Lindqvist", "Novak", "Chen", "Haddad", "Becker", "Adeyemi", "Sato", "Kowalski", "Moreau", "Nguyen", "Schmidt", "Park", "Rossi", "Mensah", "Ivanova", "Patel", "Müller", "Johansson", "Silva", "Kim", "O'Brien", "Hughes"],
+  "jobTitles": ["Staff Engineer", "Principal Data Engineer", "Security Researcher", "Engineering Manager", "Developer Advocate", "Head of Platform", "ML Engineer", "CTO", "Research Scientist", "SRE Lead", "Software Architect", "Product Engineer"],
+  "companies": ["Contoso", "Northwind Traders", "Fabrikam", "Tailspin Toys", "Wide World Importers", "Adventure Works", "Litware", "Proseware", "Woodgrove Bank", "Lucerne Publishing", "Alpine Ski House", "Trey Research", "Coho Winery", "Fourth Coffee", "Blue Yonder Airlines", "Humongous Insurance", "VanArsdel", "Relecloud"],
+  "universities": ["Wasatch Institute of Technology", "University of the Front Range", "Hanseatic Technical University", "Lakeshore University", "Université du Kirchberg"],
+  "promoters": ["Summit Live", "Granite Presents", "Northbound Concerts", "Riverside Live Entertainment", "Big Sky Productions"],
+  "keynoteThemes": ["Trust at the Edges", "The Next Ten Years", "Building for the Long Run", "Lessons from a Decade in Production", "Simplicity Scales"],
+  "rooms": ["Ballroom A", "Ballroom B", "Hall C", "Room 2.04", "Room 3.10", "Auditorium"],
+  "cancelReasons": ["Artist illness", "Venue scheduling conflict", "Production issues", "Severe weather", "Travel disruption"],
+  "streamPlatforms": ["youtube", "zoom", "custom"]
+}
