@@ -155,7 +155,12 @@ export class CinderWebServer {
 
     if (pathname === "/api/agenda" && method === "GET") {
       const event = await this.eventFor(url.searchParams.get("eventId"));
-      return this.sendJson(res, { eventId: event.id, ...(await this.app.facilitatorCtrl.getAgenda(event.id)) });
+      return this.sendJson(res, {
+        eventId: event.id,
+        // Date and timezone so clients can place "HH:MM" session times (startDate/endDate are absolute).
+        event: { id: event.id, name: event.name, timezone: event.timezone, startDate: event.startDate, endDate: event.endDate },
+        ...(await this.app.facilitatorCtrl.getAgenda(event.id))
+      });
     }
 
     if (pathname === "/api/attendees" && method === "GET") {

@@ -260,5 +260,22 @@ describe("CinderWebServer HTTP & API Routes", () => {
       assert.strictEqual(requested.topic, "Autonomous Cloud & Systems");
       assert.strictEqual(requested.compositionMeta.themeSource, "requested");
     });
+
+    it("returns the selected event's agenda, venues and prompts in the existing shape", async () => {
+      const agenda = await (await fetch(`${baseUrl}/api/agenda?eventId=${enc(SEED)}`)).json();
+      assert.strictEqual(agenda.eventId, SEED);
+      assert.deepStrictEqual(agenda.event, { id: SEED, name: "Cloud & AI Summit 2026", timezone: "America/Denver",
+        startDate: "2026-12-23T09:00:00-07:00", endDate: "2026-12-23T17:30:00-07:00" });
+      assert.strictEqual(agenda.sessions.length, 5);
+      for (const s of agenda.sessions) {
+        for (const key of ["id", "title", "speakers", "startTime", "endTime", "room", "track", "description"]) assert.ok(key in s, `session.${key}`);
+        assert.match(s.startTime, /^\d{2}:\d{2}$/);
+        assert.ok(Date.parse(s.startDate), "absolute start included");
+      }
+      const lunch = agenda.sessions.find((s) => s.sessionType === "lunch");
+      assert.strictEqual(lunch.startTime, "12:15");
+      assert.ok(agenda.venues.length >= 4 && agenda.venues.every((v) => v.id && v.name && v.tag));
+      assert.ok(agenda.prompts.length >= 3 && agenda.prompts.every((x) => typeof x === "string"));
+    });
   });
 });

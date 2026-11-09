@@ -41,6 +41,9 @@ import { EventController } from "./EventController.mjs";
 import { createClock } from "../plumbing/clock.mjs";
 import { SEED_ATTENDEES, SEED_EVENT } from "../plumbing/conferenceSeedData.mjs";
 
+/** Health-probe timeout used at startup (cold connections to a cloud cluster are slow). */
+const STARTUP_PROBE_TIMEOUT_MS = 5000;
+
 /** Entity factories injected into the adapters (infrastructure never imports concrete domain code). */
 const ENTITY = Object.freeze({
   attendee: (p) => new Attendee(p),
@@ -187,7 +190,10 @@ export class CinderApp {
     if (this.initialized) return;
 
     if (this.mode === "live") {
-      const health = await this.esClient.checkHealth();
+      // The first request to a cloud cluster pays DNS + TLS (+ serverless wake-up) and can exceed the normal
+      // probe budget, so startup gets a longer timeout and one retry before falling back to offline data.
+      let health = await this.esClient.checkHealth(STARTUP_PROBE_TIMEOUT_MS);
+      if (!health.live) health = await this.esClient.checkHealth(STARTUP_PROBE_TIMEOUT_MS);
       if (!health.live) {
         this.fallbackReason = this.esClient.lastHealthError || "cluster unreachable";
         this.build("offline");

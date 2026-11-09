@@ -148,4 +148,15 @@ describe("CinderApp composition root", () => {
     assert.strictEqual(agenda.venues.length, 4);
     assert.strictEqual(agenda.prompts.length, 3);
   });
+
+  it("retries the startup probe with a longer timeout before falling back", async () => {
+    const probes = [];
+    let calls = 0;
+    const flaky = { legacyAttendeeIndex: false, lastHealthError: "0 timeout",
+      async checkHealth(timeoutMs) { probes.push(timeoutMs); return { live: ++calls > 1 }; } };
+    const app = new CinderApp({ config: unreachable, clock, defaultEventId: DEMO, esClient: flaky });
+    await app.initialize();
+    assert.deepStrictEqual(probes, [5000, 5000]);
+    assert.strictEqual(app.mode, "live", "a cold first probe does not drop the app to offline");
+  });
 });
