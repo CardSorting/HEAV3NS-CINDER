@@ -272,7 +272,19 @@ describe("ElasticsearchAnnouncementRepository and ElasticsearchPromptRepository"
     const es = fakeClient({ search: () => [{ id: "p", text: "Q?", phase: "deep-dive", topics: ["cloud"], embedding: [1] }] });
     const out = await new ElasticsearchPromptRepository({ esClient: es, index: "cinder-prompts" }).findForVector(vec(), { phase: "deep-dive" });
     assert.deepStrictEqual(out, [{ id: "p", text: "Q?", phase: "deep-dive", topics: ["cloud"] }]);
-    assert.deepStrictEqual(es.of("search")[0].body.knn.filter, { term: { phase: "deep-dive" } });
+    assert.deepStrictEqual(es.of("search")[0].body.knn.filter, { bool: { filter: [{ term: { phase: "deep-dive" } }] } });
+  });
+
+  it("scopes prompts to the given topics plus generic '*' prompts", async () => {
+    const es = fakeClient({ search: () => [] });
+    const repo = new ElasticsearchPromptRepository({ esClient: es, index: "cinder-prompts", embedModel: ".m" });
+    await repo.findForVector(vec(), { phase: "deep-dive", topics: ["devops", "machine-learning"], text: "eBPF" });
+    for (const r of es.of("search")[0].body.retriever.rrf.retrievers) {
+      assert.deepStrictEqual(r.retriever.knn.filter.bool.filter, [
+        { term: { phase: "deep-dive" } },
+        { terms: { topics: ["devops", "machine-learning", "*"] } }
+      ]);
+    }
   });
 });
 
@@ -340,7 +352,7 @@ describe("ElasticsearchPromptRepository topic fusion", () => {
     const rrf = es.of("search")[0].body.retriever.rrf;
     assert.deepStrictEqual(rrf.retrievers.map((r) => r.weight), [1, 2]);
     assert.strictEqual(rrf.retrievers[1].retriever.knn.query_vector_builder.text_embedding.model_text, "Discussion questions about Runbook Automation & SLOs");
-    assert.ok(rrf.retrievers.every((r) => r.retriever.knn.filter.term.phase === "deep-dive"));
+    assert.ok(rrf.retrievers.every((r) => r.retriever.knn.filter.bool.filter[0].term.phase === "deep-dive"));
     await repo.findForVector(vec(), { phase: "deep-dive" });
     assert.ok(es.of("search")[1].body.knn, "vector-only kNN without text");
   });

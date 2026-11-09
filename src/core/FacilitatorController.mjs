@@ -20,11 +20,13 @@ export class FacilitatorController {
    * @param {import("../domain/interfaces/IPromptRepository.mjs").IPromptRepository} params.promptRepo
    * @param {import("../domain/interfaces/ISpaceRepository.mjs").ISpaceRepository} params.spaceRepo
    * @param {import("../domain/interfaces/IAnnouncementRepository.mjs").IAnnouncementRepository} [params.announcementRepo]
+   * @param {import("../domain/interfaces/IEventRepository.mjs").IEventRepository} [params.eventRepo] - event labels scope prompts
    * @param {{ nowMs: () => number }} params.clock
    * @param {string|null} [params.defaultEventId=null] - event for Pods created without one
    */
-  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService, agendaRepo, promptRepo, spaceRepo, clock, defaultEventId = null, announcementRepo = null }) {
+  constructor({ podRepo, attendeeRepo, eventBus, facilitatorService, agendaRepo, promptRepo, spaceRepo, clock, defaultEventId = null, announcementRepo = null, eventRepo = null }) {
     this.announcementRepo = announcementRepo;
+    this.eventRepo = eventRepo;
     if (!agendaRepo || !promptRepo || !spaceRepo || !clock) {
       throw new Error("FacilitatorController requires agendaRepo, promptRepo, spaceRepo and clock");
     }
@@ -128,12 +130,28 @@ export class FacilitatorController {
    * @param {"icebreaker"|"deep-dive"|"wrap-up"} [phase="deep-dive"]
    * @returns {Promise<{ id: string, text: string, phase: string, topics: string[] } | null>}
    */
+  async eventLabels(eventId) {
+    if (!this.eventRepo || !eventId) return [];
+    try {
+      return (await this.eventRepo.findById(eventId))?.labels || [];
+    } catch {
+      return [];
+    }
+  }
+
   async promptFor(pod, phase = "deep-dive") {
     const used = new Set((pod.messages || []).map((m) => m.metadata?.promptId).filter(Boolean));
     let candidates = [];
     if (Array.isArray(pod.centroid) && pod.centroid.length) {
       try {
-        candidates = await this.promptRepo.findForVector(pod.centroid, { phase, limit: 10, text: pod.topic });
+        // Scoped to the event's labels (e.g. devops, machine-learning) so the centroid can't drift off topic;
+        // unscoped when the event has no labels or none of its prompts remain.
+        const topics = await this.eventLabels(pod.eventId || this.defaultEventId);
+        if (topics.length) {
+          candidates = (await this.promptRepo.findForVector(pod.centroid, { phase, limit: 10, text: pod.topic, topics }))
+            .filter((p) => !used.has(p.id));
+        }
+        if (!candidates.length) candidates = await this.promptRepo.findForVector(pod.centroid, { phase, limit: 10, text: pod.topic });
       } catch {
         candidates = [];
       }

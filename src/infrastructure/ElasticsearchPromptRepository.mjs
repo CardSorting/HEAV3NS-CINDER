@@ -7,6 +7,8 @@ const FIELDS = Object.freeze(["id", "text", "phase", "topics"]);
 /** RRF weights when a topic text is given: the text decides, the vector (Pod centroid) refines. */
 const TEXT_WEIGHT = 2;
 const VECTOR_WEIGHT = 1;
+/** Topic of prompts that suit any event. */
+const GENERIC_TOPIC = "*";
 
 /**
  * Elasticsearch-backed IPromptRepository over `cinder-prompts` (prompts are embedded at ingest).
@@ -28,8 +30,11 @@ export class ElasticsearchPromptRepository extends IPromptRepository {
   }
 
   /** @inheritdoc */
-  async findForVector(vector, { phase, limit = 1, text } = {}) {
-    const filter = phase ? { term: { phase } } : undefined;
+  async findForVector(vector, { phase, limit = 1, text, topics } = {}) {
+    const clauses = [];
+    if (phase) clauses.push({ term: { phase } });
+    if (topics?.length) clauses.push({ terms: { topics: [...new Set([...topics, GENERIC_TOPIC])] } });
+    const filter = clauses.length ? { bool: { filter: clauses } } : undefined;
     const k = Math.max(limit, 10);
     const byVector = { field: "embedding", query_vector: vector, k, num_candidates: 100, ...(filter ? { filter } : {}) };
     if (!text || !this.embedModel) {

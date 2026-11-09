@@ -16,9 +16,12 @@ export class MemoryPromptRepository extends IPromptRepository {
   }
 
   /** @inheritdoc */
-  async findForVector(vector, { phase, limit = 1 } = {}) {
+  async findForVector(vector, { phase, limit = 1, topics } = {}) {
+    const wanted = topics?.length ? new Set(topics) : null;
+    const generic = (p) => !p.topics.length || p.topics.includes("*");
     return this.prompts
       .filter((p) => !phase || p.phase === phase)
+      .filter((p) => !wanted || generic(p) || p.topics.some((t) => wanted.has(t)))
       .map((p) => ({ p, score: Array.isArray(p.embedding) && vector?.length === p.embedding.length ? cosineSimilarity(vector, p.embedding) : 0 }))
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)

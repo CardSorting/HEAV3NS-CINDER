@@ -8,6 +8,14 @@ import { DEFAULT_EMBED_MODEL } from "../plumbing/elasticConfig.mjs";
 import { buildDiscoveryQuery, parseRetrieverRanks } from "./discoveryRetriever.mjs";
 
 const DEFAULT_TIMEOUT_MS = 5000;
+/** Extra attempts for read-only requests after a timeout or network error. */
+const READ_RETRIES = 1;
+
+/** GET/HEAD, and POST searches/counts/multi-gets, change nothing and are safe to repeat. */
+function isReadOnly(method, path) {
+  if (method === "GET" || method === "HEAD") return true;
+  return method === "POST" && /\/_(search|count|mget)(\?|$)/.test(path);
+}
 const DEFAULT_CHAT_MODEL = ".anthropic-claude-5-sonnet-chat_completion";
 const EMBED_BATCH = 16; // max inputs per request for Elastic-hosted embedding endpoints
 // refresh=wait_for waits for the next scheduled refresh; on serverless that can take several seconds.
@@ -117,7 +125,21 @@ export class ElasticsearchClient extends IElasticsearchClient {
    * @param {boolean} [opts.allow404=false] - Return null instead of throwing on 404
    * @param {boolean} [opts.raw=false] - Return the Response object (streaming)
    */
-  async request(method, path, { body, ndjson, timeoutMs, allow404 = false, raw = false } = {}) {
+  async request(method, path, options = {}) {
+    // Reads are retried once on a timeout or dropped connection: cloud clusters stall for a few seconds now
+    // and then, and a single slow read should not fail a demo. Writes are never retried here.
+    const retries = options.retries ?? (isReadOnly(method, path) ? READ_RETRIES : 0);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.requestOnce(method, path, options);
+      } catch (err) {
+        const transient = err instanceof ElasticsearchError && (err.type === "timeout" || err.type === "network_error");
+        if (!transient || attempt >= retries) throw err;
+      }
+    }
+  }
+
+  async requestOnce(method, path, { body, ndjson, timeoutMs, allow404 = false, raw = false } = {}) {
     const headers = { Accept: "application/json" };
     if (this.apiKey) headers.Authorization = `ApiKey ${this.apiKey}`;
     let payload;
@@ -207,7 +229,7 @@ export class ElasticsearchClient extends IElasticsearchClient {
   async checkHealth(timeoutMs = this.healthTimeoutMs) {
     const start = performance.now();
     try {
-      const data = await this.request("GET", "/", { timeoutMs });
+      const data = await this.request("GET", "/", { timeoutMs, retries: 0 });   // callers decide on retries
       const latencyMs = Number((performance.now() - start).toFixed(2));
       this.isLiveCluster = true;
       this.clusterInfo = data;

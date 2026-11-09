@@ -239,13 +239,32 @@ describe("CinderApp composition root", () => {
     const first = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
     assert.match(first.content, /Near prompt/);
     assert.strictEqual(first.metadata.promptId, "p_near");
-    assert.deepStrictEqual(asked[0], { dims: pod.centroid.length, phase: "deep-dive", limit: 10, text: pod.topic });
+    assert.deepStrictEqual(asked[0], { dims: pod.centroid.length, phase: "deep-dive", limit: 10, text: pod.topic, topics: ["cloud", "devops", "machine-learning"] });
     const second = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
     assert.match(second.content, /Far prompt/, "a prompt the pod already had is skipped");
 
     app.promptRepo.findForVector = async () => { throw new Error("vector search down"); };
     const fallback = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
     assert.ok(fallback.metadata.promptId.startsWith("prm_seed_"), "falls back to the phase list");
+  });
+
+  it("scopes discussion prompts to the event's labels, unscoped when none remain", async () => {
+    const app = new CinderApp({ clock });
+    await app.initialize();
+    const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 3 });
+    const realFind = app.eventRepo.findById.bind(app.eventRepo);
+    app.eventRepo.findById = async (id) => Object.assign(await realFind(id), { labels: ["devops"] });
+    const asked = [];
+    app.promptRepo.findForVector = async (_v, opts) => {
+      asked.push(opts.topics || null);
+      return opts.topics ? [{ id: "p_devops", text: "Devops prompt", phase: "deep-dive", topics: ["devops"] }]
+        : [{ id: "p_any", text: "Any prompt", phase: "deep-dive", topics: [] }];
+    };
+    const first = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
+    assert.strictEqual(first.metadata.promptId, "p_devops");
+    assert.deepStrictEqual(asked, [["devops"]]);
+    const second = await app.facilitatorCtrl.triggerDiscussionPrompt(pod.id);
+    assert.strictEqual(second.metadata.promptId, "p_any", "scoped prompts used up -> unscoped");
   });
 
   it("delivers published announcements once, to every pod or only to affected pods", async () => {

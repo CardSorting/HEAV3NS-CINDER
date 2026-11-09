@@ -15,10 +15,16 @@ async function main() {
   console.log("Booting CINDER Web Platform & Realtime Event Hub...");
 
   const { url } = await webServer.start();
-  const status = await app.getStatus();
-  const modeLine = status.dataMode === "live"
-    ? `Elasticsearch: LIVE (${status.elasticsearch.clusterName}) · event ${status.defaultEventId || "(none selected)"}`
-    : `Elasticsearch: OFFLINE seed data${status.fallbackReason ? ` (fallback: ${status.fallbackReason})` : ""}`;
+  // The banner's status read is informational: a slow cluster here must not take the server down.
+  let modeLine;
+  try {
+    const status = await app.getStatus();
+    modeLine = status.dataMode === "live"
+      ? `Elasticsearch: LIVE (${status.elasticsearch.clusterName}) · event ${status.defaultEventId || "(none selected)"}`
+      : `Elasticsearch: OFFLINE seed data${status.fallbackReason ? ` (fallback: ${status.fallbackReason})` : ""}`;
+  } catch (err) {
+    modeLine = `Elasticsearch: ${app.mode.toUpperCase()} (status unavailable: ${err?.message || err})`;
+  }
   console.log(`\n🚀 CINDER Conference Platform is live at: ${url}`);
   console.log(`🔎 ${modeLine}`);
   if (app.clock.isDemo) console.log(`🕒 Demo clock: ${app.clock.toISOString()}${app.clock.frozen ? " (frozen)" : ""}`);

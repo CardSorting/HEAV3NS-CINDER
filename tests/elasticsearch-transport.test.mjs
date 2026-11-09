@@ -61,6 +61,26 @@ describe("ElasticsearchClient live transport (mocked fetch)", () => {
     assert.strictEqual(new ElasticsearchClient({ nodeUrl: "http://localhost:9200" }).healthTimeoutMs, 250);
   });
 
+  it("retries a read once after a timeout, but never a write or the health probe", async () => {
+    let searches = 0;
+    const { impl, calls } = mockFetch((method, path) => {
+      if (path.includes("/_search")) return ++searches === 1 ? "hang" : { body: { hits: { hits: [], total: { value: 0 } } } };
+      return "hang";
+    });
+    const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, timeoutMs: 20 });
+    const keepAlive = setInterval(() => {}, 1000);
+    try {
+      await es.search("x", { query: { match_all: {} } });
+      assert.strictEqual(calls.filter((c) => c.path.includes("/_search")).length, 2, "search retried once");
+      await assert.rejects(() => es.request("PUT", "/x/_doc/1", { body: {} }), { type: "timeout" });
+      assert.strictEqual(calls.filter((c) => c.path === "/x/_doc/1").length, 1, "writes are not retried");
+      await es.checkHealth(20);
+      assert.strictEqual(calls.filter((c) => c.path === "/").length, 1, "the probe is not retried");
+    } finally {
+      clearInterval(keepAlive);
+    }
+  });
+
   it("raises a typed timeout error when a request exceeds its timeout", async () => {
     const { impl } = mockFetch(() => "hang");
     const es = new ElasticsearchClient({ config: CONFIG, fetchImpl: impl, timeoutMs: 20 });
