@@ -137,7 +137,8 @@ export class CinderApp {
     this.checkInCtrl = new CheckInController({
       attendeeRepo: this.attendeeRepo,
       esClient: this.esClient,
-      eventBus: this.eventBus
+      eventBus: this.eventBus,
+      liveEmbeddings: mode === "live"
     });
 
     this.discoveryCtrl = new DiscoveryController({

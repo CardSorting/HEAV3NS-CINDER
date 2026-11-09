@@ -75,4 +75,21 @@ describe("CinderApp composition root", () => {
     const forced = new CinderApp({ config: unreachable, clock, forceOffline: true });
     assert.strictEqual(forced.mode, "offline");
   });
+
+  it("checks in live attendees through the repository without a hashed embedding", async () => {
+    const saved = [];
+    let indexed = 0;
+    const app = new CinderApp({ config: unreachable, clock, defaultEventId: DEMO,
+      esClient: { legacyAttendeeIndex: false, async checkHealth() { return { live: true }; }, async indexAttendee() { indexed++; } } });
+    app.attendeeRepo.save = async (a) => { saved.push(a.toJSON()); };
+    assert.strictEqual(app.checkInCtrl.liveEmbeddings, true);
+    const attendee = await app.checkInCtrl.checkIn({ name: "Live Person", title: "SRE", eventId: DEMO, embedding: [1, 2, 3] });
+    assert.deepStrictEqual(attendee.embedding, [], "no 32-dim (or client-supplied) vector in live mode");
+    assert.strictEqual(saved.length, 1);
+    assert.strictEqual(saved[0].eventId, DEMO);
+    assert.strictEqual(indexed, 0, "embedded engine is not fed in live mode");
+    const offline = new CinderApp({ clock });
+    const local = await offline.checkInCtrl.checkIn({ name: "Offline Person", title: "SRE" });
+    assert.strictEqual(local.embedding.length, 32, "offline mode keeps the hashed embedding");
+  });
 });
