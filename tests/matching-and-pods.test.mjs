@@ -130,3 +130,32 @@ describe("Swipe and match state lives in the InteractionRepository", () => {
   });
 });
 
+
+describe("Event scoping across the offline repositories", () => {
+  it("keeps another event's attendees, swipes and pods out of the default event", async () => {
+    const app = new CinderApp();
+    await app.initialize();
+    const home = app.defaultEventId;
+    const other = "urn:ue:event:other-2026";
+    await app.checkInCtrl.checkIn({
+      id: "att_twin", name: "Kubernetes Twin", title: "Senior Platform Engineer", company: "Elsewhere", eventId: other,
+      interests: ["Kubernetes", "eBPF", "Platform Engineering"], expertise: ["Go"], looking_for: "SREs"
+    });
+
+    assert.strictEqual((await app.attendeeRepo.listAll(home)).length, 5);
+    assert.deepStrictEqual((await app.attendeeRepo.listAll(other)).map((a) => a.id), ["att_twin"]);
+
+    const feed = await app.discoveryCtrl.getDiscoveryFeed("att_alex_chen", 10);
+    assert.ok(!feed.candidates.some((c) => c.profile.id === "att_twin"), "discovery stays inside Alex's event");
+
+    const pod = await app.podCtrl.composePod({ seedAttendeeIds: ["att_alex_chen", "att_maya_lin"], targetSize: 5 });
+    assert.strictEqual(pod.eventId, home);
+    assert.ok(!pod.memberIds.includes("att_twin"), "pods only draw from the same event");
+    assert.strictEqual((await app.podCtrl.listPods(home)).length, 1);
+    assert.strictEqual((await app.podCtrl.listPods(other)).length, 0);
+
+    await app.discoveryCtrl.recordSwipe({ fromAttendeeId: "att_twin", toAttendeeId: "att_alex_chen", action: "like", eventId: other });
+    assert.deepStrictEqual(await app.interactionRepo.listSwipedIds(home, "att_twin"), []);
+    assert.deepStrictEqual(await app.interactionRepo.listSwipedIds(other, "att_twin"), ["att_alex_chen"]);
+  });
+});

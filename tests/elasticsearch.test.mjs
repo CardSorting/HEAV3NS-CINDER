@@ -60,3 +60,17 @@ describe("ElasticsearchClient Adapter", () => {
     assert.ok(searchRes.querySpec.rank.rrf);
   });
 });
+
+describe("Embedded engine event scoping", () => {
+  it("only returns attendees registered for the requested event", async () => {
+    const esClient = new ElasticsearchClient();
+    const v = generateDenseEmbedding("kubernetes platform", ["k8s"]);
+    await esClient.indexAttendee({ id: "att_a", name: "A", eventId: "ev_1", interests: ["Kubernetes"], embedding: v });
+    await esClient.indexAttendee({ id: "att_b", name: "B", eventId: "ev_2", interests: ["Kubernetes"], embedding: v });
+
+    const one = await esClient.hybridSearch({ queryText: "kubernetes", queryVector: v, limit: 5, eventId: "ev_1" });
+    assert.deepStrictEqual(one.hits.map((h) => h.id), ["att_a"]);
+    const two = await esClient.hybridSearch({ queryText: "kubernetes", queryVector: v, limit: 5, eventId: "ev_2" });
+    assert.deepStrictEqual(two.hits.map((h) => h.id), ["att_b"]);
+  });
+});

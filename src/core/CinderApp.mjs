@@ -181,6 +181,7 @@ export class CinderApp {
       promptRepo: this.promptRepo,
       spaceRepo: this.spaceRepo,
       announcementRepo: this.announcementRepo,
+      eventRepo: this.eventRepo,
       clock: this.clock,
       defaultEventId: this.defaultEventId
     });

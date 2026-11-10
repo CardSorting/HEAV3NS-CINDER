@@ -20,20 +20,14 @@ A hands-on, 10-minute onboarding tutorial: clone the repository, run automated t
 git clone https://github.com/CardSorting/elasticsearch.git
 cd elasticsearch
 
-# Run all automated tests (all 28 tests across 6 suites should pass)
+# Run all automated tests (offline; every test should pass)
 npm test
 
 # Run the Joyzoning architectural audit (verifies 0 leaks, 0 cycles)
 npm run check
 ```
 
-Expected output from `npm test`:
-```
-ℹ tests 28
-ℹ suites 6
-ℹ pass 28
-ℹ fail 0
-```
+Expected output from `npm test` ends with `ℹ fail 0`.
 
 ---
 
@@ -42,22 +36,44 @@ Expected output from `npm test`:
 Execute the end-to-end hackathon scenario via the CLI:
 
 ```bash
-npm run demo
-# or
-node bin/demo.mjs
+npm run demo              # live when .env is configured (see below), else offline
+npm run demo -- --offline # always the offline seed event
 ```
 
-Observe the 10 continuous steps rendered in your terminal:
-1. **Check In:** Registers 5 realistic attendees (Alex Chen, Maya Lin, David Kim, Priya Patel, Marcus Vance) with technical skills, current projects, and collaboration objectives.
-2. **Elasticsearch Indexing:** Automatically extracts and vectorizes profile texts into 32-dimensional normalized vectors and indexes them alongside BM25 text fields.
-3. **Hybrid Discovery & Match Synergy:** Alex Chen receives candidate recommendations using combined BM25 and dense vector kNN retrieval with an AI-generated match headline and synergy summary.
-4. **Swipe & Mutual Connection:** Alex likes Maya, and Maya likes Alex, creating a verified Mutual Match.
-5. **Intelligent Pod Formation:** System calculates semantic centroid and discipline diversity, automatically composing Pod 07 ("Cloud-Native Autonomous Agents").
-6. **Dedicated Space Provisioning:** Persistent group channel provisioned with agenda metadata and member roster.
-7. **AI Facilitator Welcome:** The AI Facilitator greets Pod 07, explains why their skills complement each other, and prompts initial introductions.
-8. **Physical Meetup Proposal:** Member suggests a physical lunch meetup at the Main Hall Cafe.
-9. **Meetup Confirmation & Pinning:** The AI Facilitator checks the conference agenda, confirms the slot (12:30 PM), and pins the location to the Pod channel header.
-10. **Agenda Coordination & Prompting:** Facilitator alerts the Pod to the upcoming Keynote Session and delivers an architectural discussion prompt.
+Observe the 10 continuous steps rendered in your terminal.
+The ten steps run against one event: the live demo event (`CINDER_DEMO_EVENT_ID`) or the offline seed event.
+Nothing about the venue is scripted: the Pod theme, the meetup place and time, and the agenda alert come from that event's
+attendees, agenda and spaces.
+
+1. **Attendee Registration:** The event's registrations are loaded (165 live, 5 offline) and the five-person demo cast is shown.
+2. **Elasticsearch Indexing:** Profiles are embedded (1024-dim Jina embeddings live, 32-dim hashed vectors offline) next to BM25 text fields.
+3. **Hybrid Search & Explanation:** Weighted RRF over BM25, profile kNN and `looking_for` kNN finds Maya Lin for Alex Chen (#1 live) with the reasons.
+4. **Swipe & Mutual Connection:** Alex and Maya like each other, forming a mutual match.
+5. **Intelligent Pod Composition:** The Pod is filled by kNN around the seeds' centroid with a discipline-diversity cap, and named after shared interests (live: "Pod 07: eBPF & Kubernetes").
+6. **Dedicated Space Provisioning:** The Pod's channel is created.
+7. **AI Facilitator Welcome:** The facilitator greets the Pod and names the next social slot on the agenda.
+8. **Physical Meetup Proposal:** A member proposes lunch at the next social slot's time.
+9. **Meetup Confirmation & Pinning:** The facilitator resolves the place and time from the agenda and venue (live: Exhibit Hall, 12:15 PM, "starts in 30 minutes") and pins it.
+10. **Agenda Coordination & Prompting:** The facilitator alerts the Pod to the upcoming talk most relevant to it and posts a discussion prompt.
+
+### Run it live: connect Elasticsearch
+
+Without configuration CINDER runs **offline** on its built-in seed event (Cloud & AI Summit 2026, five attendees, in-memory engine).
+To run against an Elastic cluster with the generated event data:
+
+```bash
+cp .env.example .env             # then set ES_URL and ES_API_KEY (.env is git-ignored; the key stays server-side)
+python3 elasticsearch/cinder/generate.py setup    # pipelines + any missing cinder-* indices (non-destructive)
+python3 elasticsearch/cinder/generate.py build    # generate, embed and load the event data (~15 min, one time)
+npm run seed:demo                # add the five scripted demo attendees to CINDER_DEMO_EVENT_ID
+npm run demo                     # ten-step scenario, live (≈40 s; writes one Pod, its messages and a match)
+npm start                        # API + React UI, live
+```
+
+`.env` also sets the demo event (`CINDER_DEMO_EVENT_ID`, DevSummit 2026) and the demo clock (`CINDER_DEMO_TIME`,
+30 minutes before day-one lunch). The server and CLI print `LIVE` or `OFFLINE` at startup; if the cluster does not answer
+the startup probe (5 s, one retry) they fall back to offline seed data. Force offline with `CINDER_OFFLINE=true` or
+`npm run demo -- --offline`. Data tooling and index details: [elasticsearch/README.md](../elasticsearch/README.md).
 
 ---
 

@@ -2,7 +2,7 @@
 /** [LAYER: UI] */
 
 import { CliPresenter } from "../src/ui/cli/cliPresenter.mjs";
-import { CinderApp } from "../src/core/CinderApp.mjs";
+import { createAppFromEnv } from "../src/ui/cli/appFromEnv.mjs";
 
 const command = process.argv[2] || "help";
 
@@ -18,7 +18,7 @@ async function main() {
   }
 
   if (command === "status") {
-    const app = new CinderApp();
+    const app = createAppFromEnv({ forceOffline: process.argv.includes("--offline") });
     await app.initialize();
     const status = await app.getStatus();
     console.log(JSON.stringify(status, null, 2));

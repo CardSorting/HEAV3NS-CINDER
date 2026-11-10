@@ -207,7 +207,8 @@ The React 19 + TypeScript frontend is served by Vite. With Node.js 22.12 or late
 ### Prerequisites
 - Node.js 22.12+ (`node -v`)
 - Git
-- *(Optional)* Live Elasticsearch 8+ instance running on `http://localhost:9200` (if absent, embedded engine runs automatically).
+- *(Optional)* An Elasticsearch 9 / Elastic Serverless project with the Jina embedding endpoint, for live mode (see below). Without one, the embedded engine runs offline on seed data.
+- *(Optional)* Python 3.9+ for the data tooling in `elasticsearch/`.
 
 ### Installation & Run
 
@@ -230,22 +231,44 @@ npm start
 # Open the Vite URL printed in the terminal (usually http://localhost:5173)
 ```
 
+### Live mode: connect Elasticsearch
+
+Without configuration CINDER runs **offline** on its built-in seed event (Cloud & AI Summit 2026, five attendees, in-memory engine).
+To run against an Elastic cluster with the generated event data:
+
+```bash
+cp .env.example .env             # then set ES_URL and ES_API_KEY (.env is git-ignored; the key stays server-side)
+python3 elasticsearch/cinder/generate.py setup    # pipelines + any missing cinder-* indices (non-destructive)
+python3 elasticsearch/cinder/generate.py build    # generate, embed and load the event data (~15 min, one time)
+npm run seed:demo                # add the five scripted demo attendees to CINDER_DEMO_EVENT_ID
+npm run demo                     # ten-step scenario, live (≈40 s; writes one Pod, its messages and a match)
+npm start                        # API + React UI, live
+```
+
+`.env` also sets the demo event (`CINDER_DEMO_EVENT_ID`, DevSummit 2026) and the demo clock (`CINDER_DEMO_TIME`,
+30 minutes before day-one lunch). The server and CLI print `LIVE` or `OFFLINE` at startup; if the cluster does not answer
+the startup probe (5 s, one retry) they fall back to offline seed data. Force offline with `CINDER_OFFLINE=true` or
+`npm run demo -- --offline`. Data tooling and index details: [elasticsearch/README.md](elasticsearch/README.md).
+
 ---
 
 ## The 10-Step Demonstration Scenario
 
-Run `node bin/demo.mjs` or `npm run demo` to observe the complete attendee journey executed in 10 continuous steps:
+Run `npm run demo` (or `node bin/demo.mjs`) to watch the attendee journey in 10 continuous steps.
+The ten steps run against one event: the live demo event (`CINDER_DEMO_EVENT_ID`) or the offline seed event.
+Nothing about the venue is scripted: the Pod theme, the meetup place and time, and the agenda alert come from that event's
+attendees, agenda and spaces.
 
-1. **Attendee Registration:** 5 realistic conference attendees register diverse profiles.
-2. **Elasticsearch Indexing:** Profiles vectorized into 32-dim space and indexed.
-3. **Hybrid Search & Synergy Explanation:** Query combines BM25 and vector kNN to discover Maya Lin for Alex Chen with synergy explanation.
-4. **Swipe & Mutual Connection:** Alex Chen and Maya Lin like each other's profiles, forming a mutual match.
-5. **Intelligent Pod Composition:** Pod 07 ("Cloud-Native Autonomous Agents") formed for 5 attendees balancing cohesion and diversity.
-6. **Dedicated Space Provisioning:** Persistent group channel provisioned with agenda metadata.
-7. **AI Facilitator Welcome:** Facilitator greets the group, introduces their shared focus, and sparks discussion.
-8. **Physical Meetup Proposal:** Member proposes lunch meetup at the Main Hall Cafe.
-9. **Meetup Confirmation & Pinning:** AI Facilitator verifies schedule slot (12:30 PM), confirms meetup, and pins it to the channel header.
-10. **Agenda Coordination & Prompting:** Facilitator announces upcoming Keynote Session and delivers an architectural discussion prompt.
+1. **Attendee Registration:** The event's registrations are loaded (165 live, 5 offline) and the five-person demo cast is shown.
+2. **Elasticsearch Indexing:** Profiles are embedded (1024-dim Jina embeddings live, 32-dim hashed vectors offline) next to BM25 text fields.
+3. **Hybrid Search & Explanation:** Weighted RRF over BM25, profile kNN and `looking_for` kNN finds Maya Lin for Alex Chen (#1 live) with the reasons.
+4. **Swipe & Mutual Connection:** Alex and Maya like each other, forming a mutual match.
+5. **Intelligent Pod Composition:** The Pod is filled by kNN around the seeds' centroid with a discipline-diversity cap, and named after shared interests (live: "Pod 07: eBPF & Kubernetes").
+6. **Dedicated Space Provisioning:** The Pod's channel is created.
+7. **AI Facilitator Welcome:** The facilitator greets the Pod and names the next social slot on the agenda.
+8. **Physical Meetup Proposal:** A member proposes lunch at the next social slot's time.
+9. **Meetup Confirmation & Pinning:** The facilitator resolves the place and time from the agenda and venue (live: Exhibit Hall, 12:15 PM, "starts in 30 minutes") and pins it.
+10. **Agenda Coordination & Prompting:** The facilitator alerts the Pod to the upcoming talk most relevant to it and posts a discussion prompt.
 
 ---
 
@@ -372,8 +395,11 @@ Explore our complete Diátaxis + Institutional Memory documentation system in [`
 Verify the codebase anytime using native Node.js test runners and Joyzoning validators:
 
 ```bash
-# Run all 28 automated test suites across all layers
+# Run the automated test suites across all layers (offline; no cluster needed)
 npm test
+
+# Opt-in tests against the cluster in .env
+npm run test:live
 
 # Run the Joyzoning architectural audit (verifies 0 zone leaks, 0 import cycles)
 npm run check
