@@ -59,7 +59,7 @@
 [x] Run elasticsearch/cinder/compat_check.py and npm run check and fix any findings
 [x] Update README.md, docs/GETTING_STARTED.md and docs/OPERATIONS.md with .env setup, data tooling commands and live mode
 [x] Rehearse the full ten-step demonstration against the live cluster and confirm offline fallback works with the network disabled
-[ ] Merge the integration branch into master and tag the release
+[x] Merge the integration branch into master and tag the release
 [ ] Add a facilitator scheduler that triggers welcome, agenda reminders, meetup reminders and prompts from the demo clock
 [ ] Add an LLM facilitator mode using the Elasticsearch chat_completion inference endpoint that only states agenda, room and time facts retrieved from Elasticsearch
 [ ] Keep the template facilitator as the fallback when the LLM endpoint fails or times out
